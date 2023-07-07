@@ -311,3 +311,136 @@ def get_lick_times(timeseries: pd.DataFrame,
     lick_times.loc[first_outcome_lick_trials,'Consumption'] = first_outcome_lick_times
 
     return lick_times.reset_index()
+
+
+def trials_by_time_array(trials: pd.DataFrame,
+                         channel: str,
+                         align_event: str,
+                         suffix='regular'):
+    
+
+    '''
+    Create simple array containing event-aligned neural traces stacked by
+    trial. Includes list of trials identifying each row in array.
+    
+    Args:
+        trials:
+            Trial-based data already including event-aligned traces by trial.
+        channel:
+            'L' or 'R' denoting source hemisphere of neural data.
+        align_event:
+            Behavior or task event neural traces are aligned to.
+        suffix:
+            Suffix of column containing aligned neural timeseries.
+
+    Returns:
+        trials_by_time (np.array):
+            Array of neural traces aligned to event and stacked by trial.
+        trial_ids (np.array):
+            1D array of trials ids corresponding to rows of trials_by_time.
+
+    Notes:
+        Expects column in trials containing pre-aligned neural data, such that
+        trial_by_time will have num_cols = window length of each pre-aligned
+        trace.
+    '''
+
+    # Drop trials that don't have photometry data.
+    photo_col = f'{align_event}_{channel}{suffix}'
+    trial_data_clean = trials.dropna(subset=photo_col).copy()
+    
+    # Store trial IDs separately to cross reference later.
+    trial_ids = trial_data_clean.nTrial.values
+    
+    # Stack event-aligned timeseries into array: timepoints x trials.
+    n_trials = len(trial_data_clean)
+    n_timepoints = len(trial_data_clean[photo_col].iloc[0])
+    exploded_trials = trial_data_clean.explode(column=photo_col)[photo_col]
+    exploded_trials = exploded_trials.astype('float')
+    trials_by_time = (np.array(exploded_trials.dropna())
+                        .reshape(n_trials, n_timepoints)
+                    )
+
+    return trials_by_time, trial_ids
+
+
+def subsample_trial_types(trials: pd.DataFrame,
+                          task_variable: str,
+                          num_trials: int):
+
+    '''
+    Sample from each trial type without replacement up to target number of
+    trials.
+    
+    Args:
+        trials:
+            Dataframe containing trial level information.
+        task_variable:
+            Column on which to group and sample trials.
+        num_trials:
+            Number of trials to sample up to within each unique condition of
+            task_variable.
+
+    Returns:
+        trials_:
+            Subsampled trial table of length 
+            N = num_trials x task_variable.nunique()
+
+    Notes:
+        Will fail if total number of trials within a group of task_variable is
+        less than num_trials.
+    '''
+
+    trials_ = trials.copy()
+    if task_variable=='h2':
+        trials_ = trials_.query('h2!="AB"') # exclude infrequent trial type
+    trials_ = (trials_
+              .reset_index(drop=True)
+              .groupby(task_variable)
+              .sample(n=num_trials, random_state=0, replace=False)
+              )
+    
+    return trials_
+
+
+def sort_by_trial_type(trials: pd.DataFrame,
+                       stacked_ts_traces: np.array,
+                       task_variable: str):
+    
+    '''
+    Sort trial table and array of aligned timeseries together on a given trial
+    variable. Always also sort first on selection time and then by reward
+    outcome.
+
+    Args:
+        trials:
+            Dataframe containing trial level information.
+        stacked_ts_traces:
+            Array containing timeseries traces aligned to given behavior event
+            and trimmed to window boundaries.
+        task_variable:
+            Column containing task variable that defines unique trial types.
+
+    Returns:
+        trials_sorted:
+            trials variable sorted by selection time, Reward, task_variable.
+        stacked_ts_traces:
+            Timeseries traces sorted (as rows) to match trials_sorted indices
+            for cross referencing.
+    '''
+
+    trials_ = trials.copy()
+    time_col = 'tSelection' if 'tSelection' in trials_.columns else 'selection time'
+    
+    # Sort trials in trial table by selection time, reward outcome, and task
+    # variable.
+    trials_sorted = trials_.sort_values(by=['Reward', time_col, task_variable])
+    idx_sorted = trials_sorted.index.values
+
+    # Sort neural traces as timeseries to match trial table.
+    stacked_ts_traces = stacked_ts_traces[idx_sorted]
+    trials_sorted['ngroup'] = (trials_sorted
+                               .groupby(task_variable, sort=False)
+                               .ngroup()
+                              )
+    return trials_sorted, stacked_ts_traces
