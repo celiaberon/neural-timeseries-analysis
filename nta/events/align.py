@@ -114,7 +114,8 @@ def align_photometry_to_event(trials: pd.DataFrame,
             Timeseries data with unbroken photometry stream used for
             alignment.
         channel:
-            'R' or 'L' specifying hemisphere of brain.
+            Specifying color and hemisphere of brain e.g. ('grnR', 'grnL',
+            'redL', 'redR').
         aligned_event:
             Task event neural data will be aligned to.
         window:
@@ -146,10 +147,10 @@ def align_photometry_to_event(trials: pd.DataFrame,
     align_trace_partial = partial(align_single_trace,
                                   ts=ts_full,
                                   window_interp=window_interp,
-                                  y_col=f'z_grn{channel}')
+                                  y_col=f'z_{channel}')
 
-    photo_column = f'{aligned_event}_{channel}_{window}'
-    times_column = f'{aligned_event}_times_{window}'
+    photo_column = f'{aligned_event}_{channel}'
+    times_column = f'{aligned_event}_times'
 
     # Initialize as NaNs to handle trials without epoch.
     trials_[photo_column] = np.nan
@@ -160,7 +161,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
                            .apply(lambda trial: align_trace_partial(idx=idx.get(trial, None))))
 
     # Map times into full trial table only for trials with complete photometry snippets.
-    trials_with_data = trials_.dropna(subset=photo_column).copy()
+    trials_with_data = trials_.dropna(subset=[photo_column]).copy()
     trials_with_data[times_column] = [timesteps]*len(trials_with_data)
     trials_[times_column] = (trials_['nTrial']
                              .map(trials_with_data.set_index('nTrial')[times_column]))
@@ -169,7 +170,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
 
 
 def interpolate_window(window: tuple=(1,3),
-                                sampling_freq: int=50):
+                       sampling_freq: int=50):
 
     '''
     Generates index interpolation for pre- and post-event window boundaries
@@ -283,7 +284,6 @@ def get_lick_times(timeseries: pd.DataFrame,
         lick_times:
             Dataframe containing event/lick times within each trial relative
             to trial start (beginning of first ENL period).
-
     '''
 
     # Create a dataframe containing index as nTrial for mapping into.
@@ -316,7 +316,8 @@ def get_lick_times(timeseries: pd.DataFrame,
 def trials_by_time_array(trials: pd.DataFrame,
                          channel: str,
                          align_event: str,
-                         suffix='regular'):
+                         win: tuple=None,
+                         FS: int=50):
     
 
     '''
@@ -327,17 +328,23 @@ def trials_by_time_array(trials: pd.DataFrame,
         trials:
             Trial-based data already including event-aligned traces by trial.
         channel:
-            'L' or 'R' denoting source hemisphere of neural data.
+            Specifying color and hemisphere of brain e.g. ('grnR', 'grnL',
+            'redL', 'redR').
         align_event:
             Behavior or task event neural traces are aligned to.
-        suffix:
-            Suffix of column containing aligned neural timeseries.
+        win:
+            Duration of time to plot before and after align_event, in seconds.
+        FS:
+            Sampling frequency in Hz of neural data.
 
     Returns:
         trials_by_time (np.array):
             Array of neural traces aligned to event and stacked by trial.
-        trial_ids (np.array):
-            1D array of trials ids corresponding to rows of trials_by_time.
+        timestamps (np.array):
+            1D array of timestamps labeling horizontal axis of trials_by_time.
+        trial_clean (pd.DataFrame):
+            Trial data corresponding to traces in heatmap array. nTrial values
+            give trial IDs for rows in trial_by_time.
 
     Notes:
         Expects column in trials containing pre-aligned neural data, such that
@@ -346,22 +353,31 @@ def trials_by_time_array(trials: pd.DataFrame,
     '''
 
     # Drop trials that don't have photometry data.
-    photo_col = f'{align_event}_{channel}{suffix}'
-    trial_data_clean = trials.dropna(subset=photo_col).copy()
-    
-    # Store trial IDs separately to cross reference later.
-    trial_ids = trial_data_clean.nTrial.values
+    photo_col = f'{align_event}_{channel}'
+    time_col = f'{align_event}_times'
+
+    all_photo_cols = [col for col in trials.columns if f'_{channel}' in col]
+    trials_clean = trials.dropna(subset=all_photo_cols).copy()
     
     # Stack event-aligned timeseries into array: timepoints x trials.
-    n_trials = len(trial_data_clean)
-    n_timepoints = len(trial_data_clean[photo_col].iloc[0])
-    exploded_trials = trial_data_clean.explode(column=photo_col)[photo_col]
-    exploded_trials = exploded_trials.astype('float')
-    trials_by_time = (np.array(exploded_trials.dropna())
+    exploded_trials = trials_clean.explode(column=[photo_col, time_col])
+    
+    if win:
+        within_window = exploded_trials[time_col].between(-win[0], win[1],
+                                                          inclusive='both')
+        exploded_trials = exploded_trials.loc[within_window]
+        n_timepoints = len(np.arange(-win[0], win[1]+(1/FS), step=1/FS))
+    else:
+        n_timepoints = len(trials_clean[photo_col].iloc[0])
+    
+    timestamps = exploded_trials[time_col].unique()
+    n_trials = exploded_trials.nTrial.nunique()
+    exploded_traces = exploded_trials[photo_col].astype('float')
+    trials_by_time = (np.array(exploded_traces.dropna())
                         .reshape(n_trials, n_timepoints)
                     )
 
-    return trials_by_time, trial_ids
+    return trials_by_time, timestamps, trials_clean
 
 
 def subsample_trial_types(trials: pd.DataFrame,
@@ -430,7 +446,7 @@ def sort_by_trial_type(trials: pd.DataFrame,
     '''
 
     trials_ = trials.copy()
-    time_col = 'tSelection' if 'tSelection' in trials_.columns else 'selection time'
+    time_col = 'tSelection' if 'tSelection' in trials_.columns else 't_cue_to_sel'
     
     # Sort trials in trial table by selection time, reward outcome, and task
     # variable.
