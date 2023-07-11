@@ -242,7 +242,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
     # Core plotting function regardless of individual trial traces or group mean.
     window = kwargs.get('window', (1,2))
     lineplot_core = partial(sns.lineplot, 
-                            x=f'{align_event}_times_{window}',
+                            x=f'{align_event}_times',
                             y=y_col,
                             hue=column,
                             data=ts,
@@ -276,6 +276,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
 def plotting_wrapper(trials: pd.DataFrame,
                      alignment_states: list=None,
                      channel: str=None,
+                     window: tuple=(1,2),
                      **kwargs):
 
     '''
@@ -301,7 +302,6 @@ def plotting_wrapper(trials: pd.DataFrame,
 
     axs=None
     fig=None
-    window = kwargs.get('window', (1,2))
 
     # Default to plotting 3 main trial events.
     if alignment_states is None:
@@ -310,11 +310,11 @@ def plotting_wrapper(trials: pd.DataFrame,
     # Iteratively fill subplots with each event-alignd photometry trace.
     for plot_iter, event in enumerate(alignment_states, start=1):
         n_iters=[len(alignment_states),plot_iter-1]
-        photometry_column = f'{event}_{channel}_{window}'
+        photometry_column = f'{event}_{channel}'
         exploded_trials = (trials.copy()
-                        .dropna(subset=photometry_column)
+                        .dropna(subset=[photometry_column])
                         .explode(column=[photometry_column, 
-                                        f'{event}_times_{window}'])
+                                        f'{event}_times'])
                         )
         fig, axs = plot_trial_type_comparison(exploded_trials,
                                             align_event=event,
@@ -323,6 +323,7 @@ def plotting_wrapper(trials: pd.DataFrame,
                                             legend_set=plot_iter>=n_iters[0],
                                             fig=fig,
                                             axs=axs,
+                                            window=window,
                                             **kwargs)
 
     return fig, axs
