@@ -22,34 +22,53 @@ class HeadfixedTask:
         specifications.
         '''
 
+        tstep = self.timestep # sec = index_units * tstep
+
         # Draw current ENL duration as index for 50 Hz samples.
-        enl = int(np.random.choice(self.enl_dist) / self.timestep)
+        enl = int(np.random.choice(self.enl_dist) // tstep)
+        cue_dur = self.cue_duration / tstep
 
         # Draw current selection time as index for 50 Hz samples.
-        selection_time = int(np.random.normal(loc=0.3, scale=0.1) / self.timestep)
-        timeout = (selection_time * self.timestep) > self.max_selection_time
+        selection_time = int(np.random.normal(loc=0.3, scale=0.1) // tstep)
+        timeout = (selection_time * tstep) > self.max_selection_time
         
         # Create first consumption lick as noisy 135 Hz oscillator from selection.
-        second_lick_delay = np.random.normal(loc=.135, scale=.05) / self.timestep
-        first_consumption_lick = int(selection_time + second_lick_delay)
+        second_lick_delay = np.random.normal(loc=.135, scale=.05) // tstep
+        first_cons_lick = selection_time + int(second_lick_delay)
 
-        n_samples = int(sum((enl, selection_time, (self.consumption_period / self.timestep))))
+        # Number of samples comprising the full trial as a timeseries.
+        n_samples = int(sum((enl, 
+                             cue_dur,
+                             selection_time, 
+                             (self.consumption_period / tstep))))
         
         # Make dataframe for current trial as a timeseries of evolving states.
-        current_trial = {state:np.zeros(n_samples) for state in ['Cue', 'Select', 'Consumption']}
-        current_trial = pd.DataFrame(current_trial)
-        current_trial['sample_interval'] = self.timestep
-        current_trial.loc[enl, 'Cue'] = 1
+        curr_trial_ts = {state:np.zeros(n_samples) for state in ['Cue', 'Select', 'Consumption']}
+        curr_trial_ts = pd.DataFrame(curr_trial_ts)
+        curr_trial_ts['sample_interval'] = tstep
+        curr_trial_ts.loc[enl, 'Cue'] = 1
 
         # Trial can only contain selection and consumption events if selection
         # occurs before max selection time.
         if not timeout:
-            current_trial.loc[enl + selection_time, 'Select'] = 1
-            current_trial.loc[enl + first_consumption_lick, 'Consumption'] = 1
-        current_trial['nTrial'] = self.nTrial
-        self.nTrial += 1 #
+            curr_trial_ts.loc[enl + selection_time + cue_dur, 'Select'] = 1
+            curr_trial_ts.loc[enl + first_cons_lick + cue_dur, 'Consumption'] = 1
+        curr_trial_ts['nTrial'] = self.nTrial
 
-        return current_trial
+        # Make dataframe for current trial as a timeseries of evolving states.
+        current_trial = {'nTrial': self.nTrial,
+                         'Reward': self.assign_reward(),
+                         't_cue_to_sel': (selection_time + cue_dur) * tstep,
+                         't_sel_to_cons': second_lick_delay * tstep,
+                         't_cue_to_cons': (first_cons_lick + cue_dur) * tstep,
+                         't_sel_pre_cons': -second_lick_delay * tstep,
+                         't_cue_pre_cons': -(first_cons_lick + cue_dur) * tstep,
+                         't_cue_pre_sel': -(selection_time + cue_dur) * tstep }
+        current_trial = pd.DataFrame(current_trial, index=[0])
+
+        self.nTrial += 1
+
+        return curr_trial_ts, current_trial
         
     def assign_reward(self):
 
@@ -82,20 +101,20 @@ class HeadfixedTask:
         based representation.
         '''
 
-        session_rewards = []
+        session_trials = []
         session_timeseries = []
         while self.nTrial < total_trials:
 
-            session_timeseries.append(self.make_trial())
-            session_rewards.append(self.assign_reward())
+            timeseries, trials = self.make_trial()
+            session_timeseries.append(timeseries)
+            session_trials.append(trials)
 
         session_timeseries = pd.concat(session_timeseries).reset_index(drop=True)
         session_timeseries['session_clock'] = session_timeseries.sample_interval.cumsum()
         
-
         self.session = session_timeseries
         self.add_pseudo_columns()
-        self.trials = pd.DataFrame({'nTrial':np.arange(total_trials), 'Reward':session_rewards})
+        self.trials = pd.concat(session_trials).reset_index(drop=True)
 
     def generate_noisy_events(self, mean_amp=3):
 
@@ -108,13 +127,12 @@ class HeadfixedTask:
             event_amplitudes = np.random.normal(mean_amp,
                                                 scale=1,
                                                 size=int(self.session[state].sum()))
+            
+            if state=='Consumption':
+                event_amplitudes *= self.trials.Reward.values
 
             self.session[f'{state}_events'] = self.session[state].copy()
             self.session.loc[self.session[state]==1, f'{state}_events'] *= event_amplitudes
-
-            # Sign flip for unrewarded trials on Consumption onset.
-            if state == 'Consumption':
-                self.session.loc[self.session[state]==1, f'{state}_events'] *= self.trials.Reward.values
 
         self.session['amplitudes'] = self.session['Cue_events'] + self.session['Consumption_events']
 
