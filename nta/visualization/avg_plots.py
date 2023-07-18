@@ -400,6 +400,7 @@ def behavior_event_distributions(ts,
         lick_times['fake_event'] = np.nan
         lick_times.query('nTrial.isin(@fake_event_trials)')['fake_event'] = fake_event_times
         
+    ylim_ub = []
     for event in ['Cue', 'Select', 'Consumption']:
 
         if graded_cue:
@@ -419,8 +420,9 @@ def behavior_event_distributions(ts,
                         label=event, stat='probability',
                         element='step', linewidth=0, edgecolor=None,
                         **plotting_kwargs)
-            
-    ax.set(ylabel='fraction\ntrials', xlabel='Time (s)', ylim=(0,1))
+            ylim_ub.append(ax.get_ylim()[1])
+
+    ax.set(ylabel='fraction\ntrials', xlabel='Time (s)', ylim=(0,max(ylim_ub)))
             
     if not legend_set:
         ax.legend().set_visible(False)
