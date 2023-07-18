@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import scipy.signal as signal
+import numpy.random as npr
 
 class HeadfixedTask:
 
@@ -25,15 +26,15 @@ class HeadfixedTask:
         tstep = self.timestep # sec = index_units * tstep
 
         # Draw current ENL duration as index for 50 Hz samples.
-        enl = int(np.random.choice(self.enl_dist) // tstep)
+        enl = int(npr.choice(self.enl_dist) // tstep)
         cue_dur = self.cue_duration / tstep
 
         # Draw current selection time as index for 50 Hz samples.
-        selection_time = int(np.random.normal(loc=0.3, scale=0.1) // tstep)
+        selection_time = int(npr.normal(loc=0.3, scale=0.1) // tstep)
         timeout = (selection_time * tstep) > self.max_selection_time
         
         # Create first consumption lick as noisy 135 Hz oscillator from selection.
-        second_lick_delay = np.random.normal(loc=.135, scale=.05) // tstep
+        second_lick_delay = np.clip(npr.normal(loc=.135, scale=.05), 0, 3) // tstep
         first_cons_lick = selection_time + int(second_lick_delay)
 
         # Number of samples comprising the full trial as a timeseries.
@@ -74,7 +75,7 @@ class HeadfixedTask:
 
         '''Assign reward at reward probability (bypassing any choice mechanic)'''
 
-        return np.random.choice([-1,1], p=[1-self.reward_prob, self.reward_prob])
+        return npr.choice([-1,1], p=[1-self.reward_prob, self.reward_prob])
 
     def assign_state(self):
 
@@ -93,6 +94,8 @@ class HeadfixedTask:
         self.session['session'] = 'sim_session'
         self.session['iSpout'] = self.session['Select'].copy()
         self.session['iSpout'] *= (self.session.nTrial // 20) % 2
+        self.trials['Session'] = 'sim_session'
+
 
     def generate_session(self, total_trials=300):
 
@@ -113,10 +116,10 @@ class HeadfixedTask:
         session_timeseries['session_clock'] = session_timeseries.sample_interval.cumsum()
         
         self.session = session_timeseries
-        self.add_pseudo_columns()
         self.trials = pd.concat(session_trials).reset_index(drop=True)
+        self.add_pseudo_columns()
 
-    def generate_noisy_events(self, mean_amp=3):
+    def generate_noisy_events(self, mean_amp=1.5):
 
         '''
         Create impulse events as basis for simulated neural data that follow
@@ -124,10 +127,10 @@ class HeadfixedTask:
         '''
 
         for state in ['Cue', 'Consumption']:
-            event_amplitudes = np.random.normal(mean_amp,
-                                                scale=1,
-                                                size=int(self.session[state].sum()))
-            
+            event_amplitudes = npr.normal(mean_amp,
+                                          scale=1,
+                                          size=int(self.session[state].sum()))
+            event_amplitudes = np.clip(event_amplitudes, 0, np.inf)
             if state=='Consumption':
                 event_amplitudes *= self.trials.Reward.values
 
@@ -135,6 +138,13 @@ class HeadfixedTask:
             self.session.loc[self.session[state]==1, f'{state}_events'] *= event_amplitudes
 
         self.session['amplitudes'] = self.session['Cue_events'] + self.session['Consumption_events']
+
+    def add_gaussian_noise(self):
+
+        baseline_noise = npr.normal(0,
+                                    scale=0.1,
+                                    size=len(self.session))
+        self.session['amplitudes'] += baseline_noise
 
     def convolve_kernel(self):
 
@@ -144,5 +154,15 @@ class HeadfixedTask:
         '''
 
         self.generate_noisy_events()
-        exp_filter = signal.windows.exponential(20, 0, tau=5, sym=False)
-        self.session['z_grnL'] = signal.convolve(self.session.amplitudes.values, exp_filter)[:len(self.session)]
+        self.add_gaussian_noise()
+        
+        # Create exponential Gaussian with assymmetric rise and fall kinetics.
+        gauss_filter = np.clip(signal.windows.gaussian(M=10, std=1), 0, np.inf)
+        convolved_sig = signal.convolve(self.session.amplitudes.values,
+                                        gauss_filter)
+        self.session['amplitudes_gauss'] = convolved_sig[:len(self.session)]
+
+        exp_filter = signal.windows.exponential(100, 0, tau=20, sym=False)
+        convolved_sig = signal.convolve(self.session.amplitudes_gauss.values,
+                                        exp_filter)
+        self.session['z_grnL'] = convolved_sig[:len(self.session)]
