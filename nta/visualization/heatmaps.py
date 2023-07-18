@@ -116,17 +116,12 @@ def scatter_behavior_events(trials: pd.DataFrame,
             Updated axis object containing scatterplot of event times.
     '''
 
-    cue_duration=0.08 # duration of cue in seconds
-
     tstep = 1/fs # timestep in seconds
     color_dict = {'selection lick':'w',
                   'first consumption lick':'k',
                   'cue onset': sns.color_palette('colorblind')[3]}
 
     other_events, labels = define_relative_events(align_event)
-
-    if align_event=='Consumption':
-        cue_duration = -cue_duration # sign flip because working backwards
 
     basic_scatterplot = partial(sns.scatterplot,
                          y=np.arange(0.5, len(trials)+0.5),
@@ -491,6 +486,7 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
             trials_, heatmap_array = sort_by_trial_type(trials_,
                                                         heatmap_array,
                                                         task_variable)
+            
         # Plot actual heatmap.
         ax = plot_heatmap(heatmap_array, 
                         trials=trials_, 
