@@ -5,12 +5,13 @@
 import pandas as pd
 import numpy as np
 from functools import partial
+from nta.events.quantify import group_peak_metrics
 
 def get_event_indices(timeseries: pd.DataFrame,
                       *,
                       aligned_event: str=None,
                       align_to: str='onset',
-                      ) -> dict:
+                      ) -> dict[int|float, np.array]:
 
     '''
     Returns indices of specified events for each trial in a lookup table.
@@ -53,7 +54,7 @@ def get_event_indices(timeseries: pd.DataFrame,
 def align_single_trace(idx: int,
                 *,
                 ts: pd.DataFrame=None,
-                window_interp: list=None,
+                window_interp: list[int|float]=None,
                 y_col: str=None,
                 ):
 
@@ -98,8 +99,9 @@ def align_photometry_to_event(trials: pd.DataFrame,
                       *,
                       channel: str=None,
                       aligned_event: str=None,
-                      window: tuple=(1,3),
+                      window: tuple[int|float,int|float]=(1,3),
                       sampling_freq: int=50,
+                      quantify_peaks: bool=True,
                       **kwargs
                       ):
 
@@ -123,6 +125,8 @@ def align_photometry_to_event(trials: pd.DataFrame,
             ALIGNED_EVENT.
         sampling_freq:
             Photometry sampling frequency in Hz.
+        quantify_peaks:
+            Option to quantify peaks with some default arguments for grouping.
 
     Returns:
         trials_:
@@ -165,11 +169,18 @@ def align_photometry_to_event(trials: pd.DataFrame,
     trials_with_data[times_column] = [timesteps]*len(trials_with_data)
     trials_[times_column] = (trials_['nTrial']
                              .map(trials_with_data.set_index('nTrial')[times_column]))
+    
+    # if quantify_peaks:
+    #     trials_ = group_peak_metrics(trials_,
+    #                                grouping_levels=['Session'],
+    #                                channel=channel,
+    #                                states=[aligned_event],
+    #                                offset=False)
 
     return trials_
 
 
-def interpolate_window(window: tuple=(1,3),
+def interpolate_window(window: tuple[int|float,int|float]=(1,3),
                        sampling_freq: int=50):
 
     '''
@@ -316,7 +327,7 @@ def get_lick_times(timeseries: pd.DataFrame,
 def trials_by_time_array(trials: pd.DataFrame,
                          channel: str,
                          align_event: str,
-                         win: tuple=None,
+                         win: tuple[int|float,int|float]=None,
                          FS: int=50):
     
 
@@ -357,7 +368,9 @@ def trials_by_time_array(trials: pd.DataFrame,
     time_col = f'{align_event}_times'
 
     all_photo_cols = [col for col in trials.columns if f'_{channel}' in col]
-    trials_clean = trials.dropna(subset=all_photo_cols).copy()
+    trials_clean = (trials.copy()
+                          .dropna(subset=all_photo_cols)
+                          .reset_index(drop=True))
     
     # Stack event-aligned timeseries into array: timepoints x trials.
     exploded_trials = trials_clean.explode(column=[photo_col, time_col])
@@ -450,7 +463,7 @@ def sort_by_trial_type(trials: pd.DataFrame,
     
     # Sort trials in trial table by selection time, reward outcome, and task
     # variable.
-    trials_sorted = trials_.sort_values(by=['Reward', time_col, task_variable])
+    trials_sorted = trials_.sort_values(by=['Reward', task_variable, time_col])
     idx_sorted = trials_sorted.index.values
 
     # Sort neural traces as timeseries to match trial table.
