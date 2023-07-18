@@ -34,7 +34,7 @@ class HeadfixedTask:
         timeout = (selection_time * tstep) > self.max_selection_time
         
         # Create first consumption lick as noisy 135 Hz oscillator from selection.
-        second_lick_delay = np.clip(npr.normal(loc=.135, scale=.05), 0, 3) // tstep
+        second_lick_delay = np.clip(npr.normal(loc=.135, scale=.02), 0, 3) // tstep
         first_cons_lick = selection_time + int(second_lick_delay)
 
         # Number of samples comprising the full trial as a timeseries.
@@ -109,6 +109,8 @@ class HeadfixedTask:
         while self.nTrial < total_trials:
 
             timeseries, trials = self.make_trial()
+            timeseries['trial_clock'] = self.timestep
+            timeseries['trial_clock'] = timeseries['trial_clock'].cumsum()
             session_timeseries.append(timeseries)
             session_trials.append(trials)
 
@@ -152,10 +154,15 @@ class HeadfixedTask:
         Convolve event amplitudes with an exponential kernel to mimic slow
         decay of fluorescent sensors.
         '''
-
+    
+        # Generate basis for neural events with noisy amplitudes occurring at
+        # behavior/task events.
         self.generate_noisy_events()
+    
+        # Add continuous Gaussian noise before convolution to give 
+        # autoregressive nature to noise.
         self.add_gaussian_noise()
-        
+    
         # Create exponential Gaussian with assymmetric rise and fall kinetics.
         gauss_filter = np.clip(signal.windows.gaussian(M=10, std=1), 0, np.inf)
         convolved_sig = signal.convolve(self.session.amplitudes.values,
