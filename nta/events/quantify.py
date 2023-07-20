@@ -259,7 +259,7 @@ def group_peak_quantification(trials: pd.DataFrame,
     group_peak_times = exp_trials[times_col]==exp_trials[f'{state}_peak_time']
     idcs = exp_trials.loc[group_peak_times].index.values
     snippet_idcs = list(itertools.chain(*[np.arange(x-hw, x+hw) for x in idcs]))
-    
+
     for af in agg_func:
         peak_col = f'{state}_{af}'
         
@@ -272,6 +272,7 @@ def group_peak_quantification(trials: pd.DataFrame,
         # Add column to trial data mapping peak metric for each trial.
         trials_ = trials_.merge(agg_df, left_on='nTrial', 
                                 right_index=True, how='left')
+        trials_[peak_col] = trials_[peak_col].astype('float')
 
     if offset:
         # At the moment offset everything by timepoint preceding cue.
