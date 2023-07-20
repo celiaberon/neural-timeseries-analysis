@@ -208,7 +208,7 @@ def group_peak_quantification(trials: pd.DataFrame,
                               *,
                               offset: bool=True,
                               hw: int=2,
-                              agg_func: list[str]=['mean']) -> pd.DataFrame:
+                              agg_funcs: list[str]=['mean']) -> pd.DataFrame:
 
     '''
     Calculate peak magnitude for each trial based on average timing of sensor
@@ -260,7 +260,7 @@ def group_peak_quantification(trials: pd.DataFrame,
     idcs = exp_trials.loc[group_peak_times].index.values
     snippet_idcs = list(itertools.chain(*[np.arange(x-hw, x+hw) for x in idcs]))
 
-    for af in agg_func:
+    for af in agg_funcs:
         peak_col = f'{state}_{af}'
         
         # Grab subset of rows for peak averaging.

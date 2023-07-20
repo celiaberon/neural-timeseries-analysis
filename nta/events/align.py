@@ -170,12 +170,13 @@ def align_photometry_to_event(trials: pd.DataFrame,
     trials_[times_column] = (trials_['nTrial']
                              .map(trials_with_data.set_index('nTrial')[times_column]))
     
-    # if quantify_peaks:
-    #     trials_ = group_peak_metrics(trials_,
-    #                                grouping_levels=['Session'],
-    #                                channel=channel,
-    #                                states=[aligned_event],
-    #                                offset=False)
+    if quantify_peaks:
+        trials_ = group_peak_metrics(trials_,
+                                   grouping_levels=['Session'],
+                                   channel=channel,
+                                   states=[aligned_event],
+                                   agg_funcs=['mean','min','max'],
+                                   offset=False)
 
     return trials_
 
@@ -305,6 +306,8 @@ def get_lick_times(timeseries: pd.DataFrame,
 
     # Get trial times for nth occurrence of event in each trial
     for event in ['Cue', 'ENLP', 'Select', 'ENL']:
+        if event not in timeseries.columns:
+            continue
         data_during_event = timeseries.loc[timeseries[event]==1].copy()
         trials_with_event = data_during_event.nTrial.unique()
         lick_times.loc[trials_with_event, event] = (data_during_event
