@@ -174,7 +174,6 @@ def group_peak_metrics(trials: pd.DataFrame,
             # value and peak time.
             for rew, peak_group_outcome in peak_group.groupby('Reward'):
                 peak_func = set_peak_function(rew, state, sensor)
-                # peak_group_outcome = peak_group.query('Reward==@rew')
 
                 # Find group mean peak time for trial peak calculations.
                 peak_time = find_group_peak_time(peak_group_outcome, 
@@ -262,13 +261,17 @@ def group_peak_quantification(trials: pd.DataFrame,
 
     for af in agg_funcs:
         peak_col = f'{state}_{af}'
+
+        # If column previously calculated, make sure it's fully overwritten.
+        if peak_col in trials_.columns:
+            trials_ = trials_.drop(columns=[peak_col])
         
         # Grab subset of rows for peak averaging.
         agg_df = (exp_trials.loc[snippet_idcs]
               .groupby('nTrial', as_index=True)
               .agg({channel_col:af})
               .rename(columns={channel_col:peak_col}))
-        
+
         # Add column to trial data mapping peak metric for each trial.
         trials_ = trials_.merge(agg_df, left_on='nTrial', 
                                 right_index=True, how='left')
