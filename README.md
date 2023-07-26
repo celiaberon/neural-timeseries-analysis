@@ -4,16 +4,16 @@ Project Organization
 	├── README.md         
 	├── requirements.txt   <- To create environment and manage dependencies.
 	│                       
-        ├── notebooks
+    ├── notebooks
     │   ├── simulated_data.ipynb
-        │
+    │
 	├── nta                
 	│   ├── __init__.py    
 	│   │
 	│   ├── data           <- Scripts to download and aggregate data.
 	│   │   └── load_data.py
 	│   │   └── simulations.py
-        │   │
+    │   │
 	│   ├── preprocessing  <- Scripts to preprocess raw data.
 	│   │   └── signal_processing.py
 	│   │   └── quality_control.py # TODO
@@ -30,7 +30,7 @@ Project Organization
 	│   └── visualization  <- Scripts to visualize event-aligned neural data.
 	│       └── avg_plots.py
 	│       └── heatmaps.py
-        │       └── peak_plots.py
+    │       └── peak_plots.py
 	│       └── roc_curves.py # TODO
 ----------
 
