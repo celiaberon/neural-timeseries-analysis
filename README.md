@@ -5,7 +5,7 @@ Project Organization
 	├── requirements.txt   <- To create environment and manage dependencies.
 	│                       
         ├── notebooks
-        │   ├── simulated_data.ipynb
+    │   ├── simulated_data.ipynb
         │
 	├── nta                
 	│   ├── __init__.py    
