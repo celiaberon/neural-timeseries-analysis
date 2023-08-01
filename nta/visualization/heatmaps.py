@@ -4,8 +4,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from functools import partial
 import matplotlib as mpl
-from nta.events.align import (subsample_trial_types, sort_by_trial_type,
+from nta.events.align import (sort_by_trial_type,
                              trials_by_time_array)
+from nta.features.select_trials import subsample_trial_types
 
 sns.set(style='whitegrid',
         rc={'axes.labelsize':11,

@@ -84,16 +84,8 @@ def subsample_trial_types(trials: pd.DataFrame,
         sampled_trials:
             Subsampled trial table of length 
             N = n_samples x task_variable.nunique()
-
-    Notes:
-        Will fail if total number of trials within a group of task_variable is
-        less than n_samples.
     '''
 
-    # trials_ = trials.copy()
-    # if task_variable=='h2':
-    #     trials_ = trials_.query('h2!="AB"') # exclude infrequent trial type
-    
     grp_trials = (trials
               .copy()
               .reset_index(drop=True)
@@ -101,7 +93,7 @@ def subsample_trial_types(trials: pd.DataFrame,
 
     try:
         check_group_size(grp_trials, sample_size=n_samples, min_frac_samples=1.0)
-        sampled_trials = trials.sample(n=n_samples, random_state=seed, replace=False)
+        sampled_trials = grp_trials.sample(n=n_samples, random_state=seed, replace=False)
 
     except AssertionError:
         print('Under sampling target, using all trials for some groups')
