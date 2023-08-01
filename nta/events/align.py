@@ -396,45 +396,6 @@ def trials_by_time_array(trials: pd.DataFrame,
     return trials_by_time, timestamps, trials_clean
 
 
-def subsample_trial_types(trials: pd.DataFrame,
-                          task_variable: str,
-                          num_trials: int):
-
-    '''
-    Sample from each trial type without replacement up to target number of
-    trials.
-    
-    Args:
-        trials:
-            Dataframe containing trial level information.
-        task_variable:
-            Column on which to group and sample trials.
-        num_trials:
-            Number of trials to sample up to within each unique condition of
-            task_variable.
-
-    Returns:
-        trials_:
-            Subsampled trial table of length 
-            N = num_trials x task_variable.nunique()
-
-    Notes:
-        Will fail if total number of trials within a group of task_variable is
-        less than num_trials.
-    '''
-
-    trials_ = trials.copy()
-    if task_variable=='h2':
-        trials_ = trials_.query('h2!="AB"') # exclude infrequent trial type
-    trials_ = (trials_
-              .reset_index(drop=True)
-              .groupby(task_variable)
-              .sample(n=num_trials, random_state=0, replace=False)
-              )
-    
-    return trials_
-
-
 def sort_by_trial_type(trials: pd.DataFrame,
                        stacked_ts_traces: np.array,
                        task_variable: str):
