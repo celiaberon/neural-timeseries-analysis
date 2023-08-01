@@ -121,7 +121,7 @@ class HeadfixedTask:
         self.trials = pd.concat(session_trials).reset_index(drop=True)
         self.add_pseudo_columns()
 
-    def generate_noisy_events(self, mean_amp=1.5):
+    def generate_noisy_events(self, mean_amp=1.5, noise=True):
 
         '''
         Create impulse events as basis for simulated neural data that follow
@@ -129,10 +129,14 @@ class HeadfixedTask:
         '''
 
         for state in ['Cue', 'Consumption']:
-            event_amplitudes = npr.normal(mean_amp,
-                                          scale=1,
-                                          size=int(self.session[state].sum()))
+            if noise:
+                event_amplitudes = npr.normal(mean_amp,
+                                            scale=1,
+                                            size=int(self.session[state].sum()))
+            else:
+                event_amplitudes = np.ones(int(self.session[state].sum()))
             event_amplitudes = np.clip(event_amplitudes, 0, np.inf)
+
             if state=='Consumption':
                 event_amplitudes *= self.trials.Reward.values
 
@@ -141,14 +145,16 @@ class HeadfixedTask:
 
         self.session['amplitudes'] = self.session['Cue_events'] + self.session['Consumption_events']
 
-    def add_gaussian_noise(self):
+    def add_gaussian_noise(self, noise=True):
 
+        if not noise:
+            return None
         baseline_noise = npr.normal(0,
                                     scale=0.1,
                                     size=len(self.session))
         self.session['amplitudes'] += baseline_noise
 
-    def convolve_kernel(self):
+    def convolve_kernel(self, **kwargs):
 
         '''
         Convolve event amplitudes with an exponential kernel to mimic slow
@@ -157,11 +163,11 @@ class HeadfixedTask:
     
         # Generate basis for neural events with noisy amplitudes occurring at
         # behavior/task events.
-        self.generate_noisy_events()
+        self.generate_noisy_events(**kwargs)
     
         # Add continuous Gaussian noise before convolution to give 
         # autoregressive nature to noise.
-        self.add_gaussian_noise()
+        self.add_gaussian_noise(**kwargs)
     
         # Create exponential Gaussian with assymmetric rise and fall kinetics.
         gauss_filter = np.clip(signal.windows.gaussian(M=10, std=1), 0, np.inf)
