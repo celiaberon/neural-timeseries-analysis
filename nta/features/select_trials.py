@@ -3,14 +3,28 @@ import pandas as pd
 
 
 def check_group_size(grouped_data,
-                     sample_size: int,
+                     n_samples: int,
                      min_frac_samples: float=0.5):
     
     '''
     Confirm each group contains at least X% trials of target sample size.
+
+    Args:
+        grouped_data:
+            Groupby object containing groups within which sampling will occur.
+        n_samples:
+            Number of samples desired from each group (w/ or w/o replacement).
+        min_frac_samples:
+            Minimum accepted proportion of sample size from which sampling is
+            permitted.
+            Note: if sampling w/o replacement, necessarily equals 1.0.
+
+    Returns:
+        AssertionError if number of trials from all groups does not exceed
+        given threshold.
     '''
 
-    min_trial_count = round(sample_size * min_frac_samples)
+    min_trial_count = round(n_samples * min_frac_samples)
     assert np.all(grouped_data.size() > min_trial_count), f'Sample size > {min_frac_samples} group size'
 
 
@@ -19,7 +33,8 @@ def resample_and_balance(trial_data: pd.DataFrame,
                          *,
                          n_samples: int=100,
                          seed: int=0,
-                         necessary_cols: list[str]=None) -> pd.DataFrame:
+                         necessary_cols: list[str]=None,
+                         **kwargs) -> pd.DataFrame:
 
     '''
     Balance trial types based on trial variable, using sampling with
@@ -54,7 +69,7 @@ def resample_and_balance(trial_data: pd.DataFrame,
                        .dropna(subset=[trial_type] + necessary_cols)
                        .groupby(trial_type))
 
-    check_group_size(imbalanced_data, sample_size=n_samples)
+    check_group_size(imbalanced_data, n_samples=n_samples)
 
     balanced_data = (imbalanced_data
                     .sample(n=n_samples, replace=True, random_state=seed))
@@ -92,7 +107,7 @@ def subsample_trial_types(trials: pd.DataFrame,
               .groupby(task_variable))
 
     try:
-        check_group_size(grp_trials, sample_size=n_samples, min_frac_samples=1.0)
+        check_group_size(grp_trials, n_samples=n_samples, min_frac_samples=1.0)
         sampled_trials = grp_trials.sample(n=n_samples, random_state=seed, replace=False)
 
     except AssertionError:
