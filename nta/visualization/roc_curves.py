@@ -98,7 +98,7 @@ def calc_dprime_sample(*,
 def calc_roc_sample(*,
                     seed: int=None,
                     trials: pd.DataFrame=None,
-                    neural_event: str='Consumption_mean',
+                    neural_event: str='Consumption_grnL_mean',
                     pred_behavior: str='',
                     **kwargs) -> tuple[np.array, np.array]:
     
@@ -225,7 +225,7 @@ def plot_roc_with_auc(fpr: np.array,
 
 
 def multiclass_roc_curves(trials: pd.DataFrame,
-                          neural_event: str='Consumption_mean',
+                          neural_event: str='Consumption_grnL_mean',
                           pred_behavior: str='',
                           trial_variable: str='Reward',
                           **kwargs):

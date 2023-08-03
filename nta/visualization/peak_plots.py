@@ -109,6 +109,7 @@ def set_color_palette(peaks, x_col, palette=None, **kwargs):
 
     return palette
 
+
 def exclude_outliers(peaks, x_col, y_col):
 
     def get_num_outliers (column):
@@ -135,14 +136,15 @@ def exclude_outliers(peaks, x_col, y_col):
 
 
 def plot_peaks_wrapper(peaks: pd.DataFrame,
-                     x_col: str=None,
-                     metrics: str | dict[str, str]='mean', 
-                     plot_func=sns.boxplot,
-                     show_outliers: bool=True,
-                     plot_func_kws=None,
-                     ignore_reward: bool=False,
-                     states=None,
-                     **kwargs):
+                       x_col: str=None,
+                       channel: str=None,
+                       metrics: str | dict[str, str]='mean', 
+                       plot_func=sns.boxplot,
+                       show_outliers: bool=True,
+                       plot_func_kws=None,
+                       ignore_reward: bool=False,
+                       states=None,
+                       **kwargs):
 
     if plot_func_kws is None:
         plot_func_kws = {}
@@ -166,7 +168,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 
         if (state != 'Consumption') or ignore_reward:
             metric = metrics[state]
-            y_col = f'{state}_{metric}'
+            y_col = f'{state}_{channel}_{metric}'
 
             # Drop outliers but take a look at how many there are first.
             if not show_outliers:
@@ -177,7 +179,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
         else:
             for reward_id, reward_group in peaks.groupby('Reward'):
                 label = f'{ax_modifiers[reward_id]}reward'
-                y_col = f'{state}_{metrics[label]}'
+                y_col = f'{state}_{channel}_{metrics[label]}'
 
                 if not show_outliers:
                     peaks = exclude_outliers(peaks, x_col, y_col)
