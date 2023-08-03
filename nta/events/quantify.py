@@ -112,7 +112,7 @@ def find_group_peak_time(ts: pd.DataFrame,
 
 
 def group_peak_metrics(trials: pd.DataFrame,
-                     grouping_levels: list[str],
+                     grouping_levels: str|list[str],
                      channel: str,
                      sensor: str='DA',
                      states: list[str]=None,
@@ -151,14 +151,19 @@ def group_peak_metrics(trials: pd.DataFrame,
 
     peak_times = defaultdict(lambda: defaultdict(list))
     trials_ = trials.copy()
+    
+    if isinstance(grouping_levels, str):
+        grouping_levels = [grouping_levels]
 
     if states is None:
         states = ['Cue', 'Consumption']
+    elif isinstance(states, str):
+        states = [states]
 
     for state in states:
 
         channel_col = f'{state}_{channel}'
-        times_col = f'{state}_times'
+        times_col = f'{state}_{channel}_times'
 
         # Convert to longform timeseries and drop NaNs from grouping columns.
         exp_trials = (trials_
@@ -193,7 +198,7 @@ def group_peak_metrics(trials: pd.DataFrame,
                     .T
                     .explode(column=[times_col, f'{state}_trials'])
                     .set_index(f'{state}_trials'))
-        trials_[f'{state}_peak_time'] = trials_['nTrial'].map(peak_times_state[times_col])
+        trials_[f'{channel_col}_peak_time'] = trials_['nTrial'].map(peak_times_state[times_col])
 
         # Calculate peak magnitude around mean peak time for individual trials.
         trials_ = group_peak_quantification(trials_,state, channel, **kwargs)
@@ -246,7 +251,7 @@ def group_peak_quantification(trials: pd.DataFrame,
     T_BASELINE = -0.04 
 
     channel_col = f'{state}_{channel}'
-    times_col = f'{state}_times'
+    times_col = f'{state}_{channel}_times'
 
     trials_ = trials.copy()
     exp_trials = (trials_
@@ -255,12 +260,12 @@ def group_peak_quantification(trials: pd.DataFrame,
 
     # Get index of rows at group peak time and expand to permissible range for
     # individual trial peak time. 
-    group_peak_times = exp_trials[times_col]==exp_trials[f'{state}_peak_time']
+    group_peak_times = exp_trials[times_col]==exp_trials[f'{channel_col}_peak_time']
     idcs = exp_trials.loc[group_peak_times].index.values
     snippet_idcs = list(itertools.chain(*[np.arange(x-hw, x+hw) for x in idcs]))
 
     for af in agg_funcs:
-        peak_col = f'{state}_{af}'
+        peak_col = f'{channel_col}_{af}'
 
         # If column previously calculated, make sure it's fully overwritten.
         if peak_col in trials_.columns:

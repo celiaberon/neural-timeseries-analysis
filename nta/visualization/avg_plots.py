@@ -170,7 +170,7 @@ def config_plot_cpal(*, cmap_colors=None, **kwargs):
 def plot_trial_type_comparison(ts: pd.DataFrame,
                                *,
                                column: str=None,
-                               align_event: str=None,
+                            #    align_event: str=None,
                                y_col: str=None,
                                trial_units: bool=False,
                                behavior_hist: bool=False,
@@ -242,7 +242,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
     # Core plotting function regardless of individual trial traces or group mean.
     window = kwargs.get('window', (1,2))
     lineplot_core = partial(sns.lineplot, 
-                            x=f'{align_event}_times',
+                            x=f'{y_col}_times',
                             y=y_col,
                             hue=column,
                             data=ts,
@@ -262,11 +262,11 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                             err_kws={'alpha':0.3},
                             estimator=kwargs.get('estimator', 'mean'))
 
-    ax1 = config_plot(ax1, align_event, column, **kwargs)
+    ax1 = config_plot(ax1, y_col, column, **kwargs)
 
     # Plot distribution of behavioral/task events relative to alignment event.
     if behavior_hist:
-        ax2 = behavior_event_distributions(ts, align_event, ax2,
+        ax2 = behavior_event_distributions(ts, y_col, ax2,
                                            column=column, **kwargs)
 
     plt.tight_layout()
@@ -314,7 +314,7 @@ def plotting_wrapper(trials: pd.DataFrame,
         exploded_trials = (trials.copy()
                         .dropna(subset=[photometry_column])
                         .explode(column=[photometry_column, 
-                                        f'{event}_times'])
+                                        f'{event}_{channel}_times'])
                         )
         fig, axs = plot_trial_type_comparison(exploded_trials,
                                             align_event=event,
@@ -330,7 +330,7 @@ def plotting_wrapper(trials: pd.DataFrame,
 
 
 def config_plot(ax, 
-                align_event: str, 
+                y_col: str, 
                 column: str,
                 legend_set: bool=False, 
                 ylim: tuple=(-2,3),
@@ -342,7 +342,8 @@ def config_plot(ax,
     Configure plot aesthetics such as labeling 0 positions on axes
     and setting limits/legends/tick labels consistently.
     '''
-
+    
+    align_event = y_col.split('_')[0]
     ax.axvline(x=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0, 
                label=None)
     ax.axhline(y=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0)
@@ -372,7 +373,7 @@ def label_legend_unique_handles(ax, **kwargs):
 
 
 def behavior_event_distributions(ts,
-                                 align_event,
+                                 y_col,
                                  ax,
                                  *,
                                  graded_cue: bool=False,
@@ -386,6 +387,8 @@ def behavior_event_distributions(ts,
                   'Select':'darkgray', 
                   'Consumption':'k'}
     plotting_kwargs = {'color': True}
+
+    align_event = y_col.split('_')[0]
     
     if 'ENL' in align_event:
         ts_ = ts.copy().groupby('nTrial')['T_ENL'].nth(0)

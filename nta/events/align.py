@@ -97,7 +97,7 @@ def align_single_trace(idx: int,
 def align_photometry_to_event(trials: pd.DataFrame,
                       ts_full: pd.DataFrame,
                       *,
-                      channel: str=None,
+                      channel: str|list[str]=None,
                       aligned_event: str=None,
                       window: tuple[int|float,int|float]=(1,3),
                       sampling_freq: int=50,
@@ -140,6 +140,8 @@ def align_photometry_to_event(trials: pd.DataFrame,
     else:
         assert ts_full.nTrial.diff().max() == 1
 
+    if isinstance(channel, str):
+        channel = [channel]
 
     trials_ = trials.copy()
 
@@ -147,36 +149,37 @@ def align_photometry_to_event(trials: pd.DataFrame,
     idx = get_event_indices(ts_full, aligned_event=aligned_event, **kwargs)
     window_interp, timesteps = interpolate_window(window, sampling_freq)
 
-    # Need full unbroken timeseries of photometry data to properly address trial continuity.
-    align_trace_partial = partial(align_single_trace,
-                                  ts=ts_full,
-                                  window_interp=window_interp,
-                                  y_col=f'z_{channel}')
+    for ch in channel:
+        # Need full unbroken timeseries of photometry data to properly address trial continuity.
+        align_trace_partial = partial(align_single_trace,
+                                    ts=ts_full,
+                                    window_interp=window_interp,
+                                    y_col=ch)
 
-    photo_column = f'{aligned_event}_{channel}'
-    times_column = f'{aligned_event}_times'
+        photo_column = f'{aligned_event}_{ch}'
+        times_column = f'{aligned_event}_{ch}_times'
 
-    # Initialize as NaNs to handle trials without epoch.
-    trials_[photo_column] = np.nan
-    trials_[times_column] = np.nan
+        # Initialize as NaNs to handle trials without epoch.
+        trials_[photo_column] = np.nan
+        trials_[times_column] = np.nan
 
-    # Store snippet of photometry data alongside trial data.
-    trials_[photo_column]= (trials_['nTrial']
-                           .apply(lambda trial: align_trace_partial(idx=idx.get(trial, None))))
+        # Store snippet of photometry data alongside trial data.
+        trials_[photo_column]= (trials_['nTrial']
+                            .apply(lambda trial: align_trace_partial(idx=idx.get(trial, None))))
 
-    # Map times into full trial table only for trials with complete photometry snippets.
-    trials_with_data = trials_.dropna(subset=[photo_column]).copy()
-    trials_with_data[times_column] = [timesteps]*len(trials_with_data)
-    trials_[times_column] = (trials_['nTrial']
-                             .map(trials_with_data.set_index('nTrial')[times_column]))
-    
-    if quantify_peaks:
-        trials_ = group_peak_metrics(trials_,
-                                   grouping_levels=['Session'],
-                                   channel=channel,
-                                   states=[aligned_event],
-                                   agg_funcs=['mean','min','max'],
-                                   offset=False)
+        # Map times into full trial table only for trials with complete photometry snippets.
+        trials_with_data = trials_.dropna(subset=[photo_column]).copy()
+        trials_with_data[times_column] = [timesteps]*len(trials_with_data)
+        trials_[times_column] = (trials_['nTrial']
+                                .map(trials_with_data.set_index('nTrial')[times_column]))
+        
+        if quantify_peaks:
+            trials_ = group_peak_metrics(trials_,
+                                    grouping_levels=['Session'],
+                                    channel=ch,
+                                    states=[aligned_event],
+                                    agg_funcs=['mean','min','max'],
+                                    offset=False)
 
     return trials_
 
@@ -368,7 +371,7 @@ def trials_by_time_array(trials: pd.DataFrame,
 
     # Drop trials that don't have photometry data.
     photo_col = f'{align_event}_{channel}'
-    time_col = f'{align_event}_times'
+    time_col = f'{align_event}_{channel}_times'
 
     all_photo_cols = [col for col in trials.columns if f'_{channel}' in col]
     trials_clean = (trials.copy()
