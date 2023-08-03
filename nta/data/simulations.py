@@ -170,12 +170,13 @@ class HeadfixedTask:
         self.add_gaussian_noise(**kwargs)
     
         # Create exponential Gaussian with assymmetric rise and fall kinetics.
-        gauss_filter = np.clip(signal.windows.gaussian(M=10, std=1), 0, np.inf)
+        # Std chosen to roughly preserve amplitude of event.
+        gauss_filter = np.clip(signal.windows.gaussian(M=10, std=0.43), 0, np.inf)
         convolved_sig = signal.convolve(self.session.amplitudes.values,
                                         gauss_filter)
         self.session['amplitudes_gauss'] = convolved_sig[:len(self.session)]
 
-        exp_filter = signal.windows.exponential(100, 0, tau=20, sym=False)
+        exp_filter = signal.windows.exponential(140, 0, tau=20, sym=False)
         convolved_sig = signal.convolve(self.session.amplitudes_gauss.values,
                                         exp_filter)
-        self.session['z_grnL'] = convolved_sig[:len(self.session)]
+        self.session['grnL'] = convolved_sig[:len(self.session)]
