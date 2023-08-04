@@ -405,6 +405,7 @@ def create_scaled_colorbar(fig, axs, vmin: float, vmax: float):
     (fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
                  ax=axs,
                  anchor=(1.0, 0.5),
+                 panchor=(0,0),
                  shrink=0.15,
                  label='z-score',
                  orientation='horizontal',
@@ -509,13 +510,13 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
     fig, axs = create_scaled_colorbar(fig, axs, vmin, vmax)
 
     # Edit legend to give white points a black border (but not in plot itself).
-    h, l = ax.get_legend_handles_labels()
-    h[0].set_edgecolor('k')
-    ax.legend(*list(zip(*[(h_, l_) for h_, l_ in zip(h,l) if len(l_)>2])),
+    h, l = axs[-1].get_legend_handles_labels()
+    h[l.index('selection lick')].set_edgecolor('k')
+    axs[-1].legend(*list(zip(*[(h_, l_) for h_, l_ in zip(h,l) if len(l_)>2])),
                 bbox_to_anchor=(1,1),
                 markerscale=2.,
                 edgecolor='white')
-    h[0].set_edgecolor('white')
+    h[l.index('selection lick')].set_edgecolor('white')
 
     plt.tight_layout()
 
