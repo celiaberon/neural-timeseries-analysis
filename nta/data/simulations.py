@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import scipy.signal as signal
 import numpy.random as npr
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 class HeadfixedTask:
 
@@ -172,11 +174,35 @@ class HeadfixedTask:
         # Create exponential Gaussian with assymmetric rise and fall kinetics.
         # Std chosen to roughly preserve amplitude of event.
         gauss_filter = np.clip(signal.windows.gaussian(M=10, std=0.43), 0, np.inf)
+        self.gauss_filter = gauss_filter
         convolved_sig = signal.convolve(self.session.amplitudes.values,
                                         gauss_filter)
         self.session['amplitudes_gauss'] = convolved_sig[:len(self.session)]
 
         exp_filter = signal.windows.exponential(140, 0, tau=20, sym=False)
+        self.exp_filter = exp_filter
         convolved_sig = signal.convolve(self.session.amplitudes_gauss.values,
                                         exp_filter)
         self.session['grnL'] = convolved_sig[:len(self.session)]
+
+    def plot_event_to_kernel(self):
+
+        '''
+        Visualize transoformation of impulse event through convolution with
+        Gaussian-exponential kernel
+        '''
+
+        # Create single impulse event of magnitude = 3.
+        sim_sig = np.zeros(100)
+        sim_sig[50] = 3
+
+        # Convolve impulse with gaussian then exponential kernels.
+        gauss_sig = signal.convolve(sim_sig, self.gauss_filter)
+        exp_gauss_sig = signal.convolve(gauss_sig, self.exp_filter)
+        
+        fig, ax = plt.subplots(figsize=(3,2))
+        ax.plot(sim_sig, lw=1.5, label='simulated event')
+        ax.plot(exp_gauss_sig, lw=1.5, alpha=0.8, label='filtered event')
+        ax.set(xlabel='n points', ylabel='event magnitude')
+        plt.legend()
+        sns.despine()
