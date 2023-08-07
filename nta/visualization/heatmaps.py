@@ -10,10 +10,11 @@ from nta.events.align import sort_by_trial_type, trials_by_time_array
 from nta.features.select_trials import subsample_trial_types
 
 sns.set(style='whitegrid',
-        rc={'axes.labelsize':11,
-            'axes.titlesize':11, 
-            'legend.fontsize':11,
-            'savefig.transparent':True})
+        rc={'axes.labelsize': 11,
+            'axes.titlesize': 11,
+            'legend.fontsize': 11,
+            'savefig.transparent': True})
+
 
 def add_relative_timing_columns(timeseries: pd.DataFrame,
                                 trials: pd.DataFrame):
@@ -34,7 +35,7 @@ def add_relative_timing_columns(timeseries: pd.DataFrame,
             Trial data containing columns for each relative timing event.
     '''
 
-    CUE_DURATION=0.08
+    CUE_DURATION = 0.08
 
     trials_ = trials.copy()
     trials_['t_cue_to_sel'] = (trials_['tSelection'] / 1000) + CUE_DURATION
@@ -42,14 +43,15 @@ def add_relative_timing_columns(timeseries: pd.DataFrame,
     # Calculate delay between selection and consumption licks as difference
     # in lengths between true and effective consumption states.
     lick_delay = (timeseries
-                 .groupby('nTrial', as_index=False)
-                 .agg({'Consumption':np.sum, 'stateConsumption':np.sum}))
-    lick_delay['t_sel_to_cons'] = (lick_delay.stateConsumption 
-                                  - lick_delay.Consumption) * (1/50)
-    
+                  .groupby('nTrial', as_index=False)
+                  .agg({'Consumption': np.sum, 'stateConsumption': np.sum}))
+    lick_delay['t_sel_to_cons'] = (lick_delay.stateConsumption
+                                   - lick_delay.Consumption) * (1/50)
+
     lick_delay_trial_lut = lick_delay.set_index('nTrial')['t_sel_to_cons']
     trials_['t_sel_to_cons'] = (trials_['nTrial'].map(lick_delay_trial_lut))
-    trials_['t_cue_to_cons'] = trials_['t_cue_to_sel'] + trials_['t_sel_to_cons']
+    trials_['t_cue_to_cons'] = (trials_['t_cue_to_sel']
+                                + trials_['t_sel_to_cons'])
 
     # Relative events preceding later events in a trial.
     trials_['t_sel_pre_cons'] = -trials_['t_sel_to_cons']
@@ -64,13 +66,13 @@ def define_relative_events(align_event: str):
     '''
     Define task/behavioral events that will be plotted relative to the aligned
     event based on column headers and timing necessary for proper alignment.
-    
+
     Args:
         align_event:
             The name of the event aligned at x=0 for plotting/timing.
 
     Returns:
-        other_event_cols: 
+        other_event_cols:
             Column headers corresponding to other events to be plotted.
         labels:
             Generic labels for other events consistent across plots.
@@ -94,7 +96,7 @@ def scatter_behavior_events(trials: pd.DataFrame,
                             ax,
                             align_event: str,
                             window: tuple,
-                            fs: int=50
+                            fs: int = 50
                             ):
 
     '''
@@ -118,38 +120,38 @@ def scatter_behavior_events(trials: pd.DataFrame,
             Updated axis object containing scatterplot of event times.
     '''
 
-    tstep = 1/fs # timestep in seconds
-    color_dict = {'selection lick':'w',
-                  'first consumption lick':'k',
+    tstep = 1/fs  # timestep in seconds
+    color_dict = {'selection lick': 'w',
+                  'first consumption lick': 'k',
                   'cue onset': sns.color_palette('colorblind')[3]}
 
     other_events, labels = define_relative_events(align_event)
 
     basic_scatterplot = partial(sns.scatterplot,
-                         y=np.arange(0.5, len(trials)+0.5),
-                         ax=ax,
-                         marker='.',
-                         edgecolor=None,
-                         size=1)
+                                y=np.arange(0.5, len(trials)+0.5),
+                                ax=ax,
+                                marker='.',
+                                edgecolor=None,
+                                size=1)
 
     # Plot other task events relative to aligned task event at x=0.
     for label, task_event in zip(labels, other_events):
-        
+
         # Offset task event position by pre-window duration and cue_offset in
         # addition to relative event timing.
         event_times = (trials[task_event].values + window[0]) / tstep
         basic_scatterplot(x=event_times,
-                        color=color_dict[label],
-                        label=label
-                        )
+                          color=color_dict[label],
+                          label=label
+                          )
 
     # Scatterplot for align_event as x=0 for each trial.
     align_event_label = [k for k in color_dict if align_event.lower() in k][0]
     basic_scatterplot(x=window[0]/tstep,
                       color=color_dict[align_event_label],
                       label=align_event_label
-                     )
-    
+                      )
+
     ax.legend().remove()
 
     return ax
@@ -157,12 +159,12 @@ def scatter_behavior_events(trials: pd.DataFrame,
 
 def label_trial_types(ax,
                       *,
-                      trials: pd.DataFrame=None,
-                      task_variable: str=None,
+                      trials: pd.DataFrame = None,
+                      task_variable: str = None,
                       trial_type_palette=None,
-                      tstep: float=1/50,
-                      include_label: bool=True):
-    
+                      tstep: float = 1/50,
+                      include_label: bool = True):
+
     '''
     Add vertical lines with text labels to denote collections of trials within
     each unique trial type.
@@ -186,25 +188,25 @@ def label_trial_types(ax,
             Updated axes with color-coded and labeled trial types.
     '''
 
-    if (task_variable is None) or (task_variable=='Trial'):
-        return ax # nothing to label in these cases
-    
-    ymax = 0 # initialize at origin 
+    if (task_variable is None) or (task_variable == 'Trial'):
+        return ax  # nothing to label in these cases
+
+    ymax = 0  # initialize at origin
 
     x_scale_factor = np.abs(ax.get_xlim()).sum()
     x_offset = x_scale_factor / (500*tstep)
 
-    for i, (trial_label, grouped_trials) in enumerate(trials.groupby(task_variable, sort=False)):
+    for i, (key, grp) in enumerate(trials.groupby(task_variable, sort=False)):
 
         # Select color for trial type labeling and annotation.
         if trial_type_palette is None:
             trial_color = sns.color_palette('deep')[i]
         else:
-            trial_color = trial_type_palette[trial_label]
+            trial_color = trial_type_palette[key]
 
         # Set y-bounds for trial type bar label and vertically center text.
         ymin = ymax
-        ymax += len(grouped_trials)
+        ymax += len(grp)
         text_y = (ymax+ymin)/2
         ax.vlines(x=-.5,
                   ymin=ymin,
@@ -215,23 +217,23 @@ def label_trial_types(ax,
                   )
 
         if include_label:
-            ax.annotate(trial_label,
+            ax.annotate(key,
                         (-x_offset, text_y),
                         va='center',
                         color=trial_color,
                         fontsize=13,
-                        annotation_clip=False, 
+                        annotation_clip=False,
                         rotation=90
                         )
-            ax.yaxis.set_label_coords(-0.1,0.5)
-    
+            ax.yaxis.set_label_coords(-0.1, 0.5)
+
     return ax
 
 
 def get_cmap_range(trials: pd.DataFrame,
-                   states: list=None,
-                   channel: str=None):
-    
+                   states: list = None,
+                   channel: str = None):
+
     '''
     Get range of values for neural traces to normalize colormap
     onto. Likely overkill to do it by state-aligned window unless
@@ -250,9 +252,9 @@ def get_cmap_range(trials: pd.DataFrame,
             Min and max values across all state-aligned neural timeseries.
     '''
 
-    vmin=np.inf
-    vmax=-np.inf
-    
+    vmin = np.inf
+    vmax = -np.inf
+
     if states is None:
         states = ['Cue', 'Select', 'Consumption']
 
@@ -267,7 +269,7 @@ def get_cmap_range(trials: pd.DataFrame,
 
 def center_xticks_around_zero(tstamps: list,
                               freq: float | int,
-                              tick_interval: int=None):
+                              tick_interval: int = None):
 
     '''
     Get list of xticks and xticklabels that are centered at x=0 seconds and
@@ -287,7 +289,7 @@ def center_xticks_around_zero(tstamps: list,
         xticklabels:
             Labels corresponding to xticks.
     '''
-    
+
     # Set tick interval in units of seconds, defaults to 1s.
     if tick_interval is None:
         tick_interval = freq
@@ -300,12 +302,12 @@ def center_xticks_around_zero(tstamps: list,
 
     # Piecewise create list of indices for tick positions at tick_interval.
     pre_window_idcs = np.arange(center_idx, -1, step=-tick_interval)
-    pre_window_idcs = pre_window_idcs[pre_window_idcs>=0] # only positive idcs
+    pre_window_idcs = pre_window_idcs[pre_window_idcs >= 0]  # positive idcs
     post_window_idcs = np.arange(center_idx, len(tstamps), step=tick_interval)
     xticks = np.unique(np.concatenate((pre_window_idcs, post_window_idcs)))
-    
+
     # Get tick labels from timestamp list.
-    xtick_labels = tstamps[xticks] 
+    xtick_labels = tstamps[xticks]
 
     return xticks, xtick_labels
 
@@ -313,18 +315,18 @@ def center_xticks_around_zero(tstamps: list,
 def plot_heatmap(heatmap_array: np.array,
                  align_event: str,
                  *,
-                 tstamps: list=None,
+                 tstamps: list = None,
                  ax=None,
-                 hm_kwargs=None, 
+                 hm_kwargs=None,
                  **kwargs,
                  ):
-    
+
     '''
     Plot a heatmap where each row contains event-aligned data from a single
     trial, the x-axis spans a designated window of time, and the color
     intensity corresponds to the magnitude of a neural timeseries at each
     timepoint.
-    
+
     Args:
         heatmap_array:
             Array containing neural data for N trials x M timespoints.
@@ -344,10 +346,10 @@ def plot_heatmap(heatmap_array: np.array,
             Axis object containing heatmap.
     '''
 
-    np.random.seed(0) # seed for consistent subsampling.
+    np.random.seed(0)  # seed for consistent subsampling.
 
     # Convert window boundaries from time (secs) to index points for x-axis.
-    freq = round(1/np.diff(tstamps[:2])[0]) # number of samples per second
+    freq = round(1/np.diff(tstamps[:2])[0])  # number of samples per second
 
     # Alignment errors if window length dims not specified properly.
     assert len(tstamps) == heatmap_array.shape[1]
@@ -357,7 +359,7 @@ def plot_heatmap(heatmap_array: np.array,
         fig, ax = plt.subplots(**kwargs)
     if hm_kwargs is None:
         hm_kwargs = {}
-    
+
     # Plot heatmap.
     sns.heatmap(heatmap_array,
                 cmap='viridis',
@@ -366,18 +368,18 @@ def plot_heatmap(heatmap_array: np.array,
                 cbar=False,
                 **hm_kwargs,
                 label=None)
-    
+
     # Label groups of trial types.
     ax = label_trial_types(ax=ax,
                            tstep=1/freq,
                            **kwargs)
-   
+
     xticks, xticklabels = center_xticks_around_zero(tstamps,
                                                     freq,
                                                     tick_interval=1.0)
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticklabels, rotation=0)
-    ax.set(ylabel='nTrial', xlabel='time (s)', yticks=[], 
+    ax.set(ylabel='nTrial', xlabel='time (s)', yticks=[],
            title=f'aligned to {align_event}')
 
     return ax
@@ -401,31 +403,31 @@ def create_scaled_colorbar(fig, axs, vmin: float, vmax: float):
             Updated figure and axes objects containing colorbar.
     '''
 
-    cmap = 'viridis' 
-    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax) # min and max values from the spectrogram
+    cmap = 'viridis'
+    norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)  # spectrogram min/max
     (fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
-                 ax=axs,
-                 anchor=(1.0, 0.5),
-                 panchor=(0,0),
-                 shrink=0.15,
-                 label='z-score',
-                 orientation='horizontal',
-                 )
-                 .outline.set_visible(False))
+                  ax=axs,
+                  anchor=(1.0, 0.5),
+                  panchor=(0, 0),
+                  shrink=0.15,
+                  label='z-score',
+                  orientation='horizontal',
+                  )
+        .outline.set_visible(False))
 
     return fig, axs
 
 
 def plot_heatmap_wrapper(trials: pd.DataFrame,
                          *,
-                         alignment_states: list=None,
-                         channel: str=None,
-                         task_variable: str=None,
-                         subsample: int=None,
-                         win: tuple=(1,2),
-                         figsize: tuple=None,
+                         alignment_states: list = None,
+                         channel: str = None,
+                         task_variable: str = None,
+                         subsample: int = None,
+                         win: tuple = (1, 2),
+                         figsize: tuple = None,
                          **kwargs):
-    
+
     '''
     Wrapper to combine typical sets of components into heatmaps plotting
     neural activitiy by trial over time, overlaid with relative timing of task
@@ -443,7 +445,7 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
             Variable on which unique trial types are conditioned.
         subsample:
             Target sample size per group within task_variable to downsample
-            (w/o replacement) number of trials to. 
+            (w/o replacement) number of trials to.
         win:
             Duration plotted before and after event at x=0, in seconds.
         figsize:
@@ -462,20 +464,20 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
         figsize = (3.*len(alignment_states), 2.0)
 
     fig, axs = plt.subplots(ncols=len(alignment_states),
-                           figsize=figsize,
-                           sharey=True,
-                           sharex=True)
-    
+                            figsize=figsize,
+                            sharey=True,
+                            sharex=True)
+
     # Set min and max values for color-mapped range.
     vmin, vmax = get_cmap_range(trials, channel=channel)
 
     for i, (ax, state) in enumerate(zip(axs, alignment_states)):
 
-        # Create image-like array of event-aligned timeseries as basis for heatmap.
-        heatmap_array, timestamps, trials_ = trials_by_time_array(trials,
-                                                            channel=channel, 
-                                                            align_event=state,
-                                                            win=win)
+        # Create image-like array of event-aligned timeseries.
+        hm_array, timestamps, trials_ = trials_by_time_array(trials,
+                                                             channel=channel,
+                                                             align_event=state,
+                                                             win=win)
 
         # Sort trials by task variable and subsample to target num trials
         # within condition. Needs to be after setting trials for heatmap array.
@@ -486,38 +488,39 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
                                                 subsample)
             else:
                 trials_ = trials_.copy().reset_index(drop=True)
-            trials_, heatmap_array = sort_by_trial_type(trials_,
-                                                        heatmap_array,
-                                                        task_variable)
-            
+            trials_, hm_array = sort_by_trial_type(trials_,
+                                                   hm_array,
+                                                   task_variable)
+
         # Plot actual heatmap.
-        ax = plot_heatmap(heatmap_array, 
-                        trials=trials_, 
-                        align_event=state,
-                        task_variable=task_variable,
-                        tstamps=timestamps,
-                        ax=ax, 
-                        include_label=i<1,
-                        hm_kwargs={'vmin':vmin, 'vmax':vmax},
-                        **kwargs)
-        
+        ax = plot_heatmap(hm_array,
+                          trials=trials_,
+                          align_event=state,
+                          task_variable=task_variable,
+                          tstamps=timestamps,
+                          ax=ax,
+                          include_label=i < 1,
+                          hm_kwargs={'vmin': vmin, 'vmax': vmax},
+                          **kwargs)
+
         # Convert window boundaries from time (secs) to idx points for x-axis.
-        freq = round(1/np.diff(timestamps[:2])[0]) # num samples per second
-        
+        freq = round(1/np.diff(timestamps[:2])[0])  # num samples per second
+
         # Overlay scatterplot of behavior events for each trial's timeseries.
         ax = scatter_behavior_events(trials_, ax, state, win, fs=freq)
-        
+
     # Rescale colorbar to fit plot.
     fig, axs = create_scaled_colorbar(fig, axs, vmin, vmax)
 
     # Edit legend to give white points a black border (but not in plot itself).
-    h, l = axs[-1].get_legend_handles_labels()
-    h[l.index('selection lick')].set_edgecolor('k')
-    axs[-1].legend(*list(zip(*[(h_, l_) for h_, l_ in zip(h,l) if len(l_)>2])),
-                bbox_to_anchor=(1,1),
-                markerscale=2.,
-                edgecolor='white')
-    h[l.index('selection lick')].set_edgecolor('white')
+    h, labels = axs[-1].get_legend_handles_labels()
+    h[labels.index('selection lick')].set_edgecolor('k')
+    real_legend_items = [(h_, l_) for h_, l_ in zip(h, labels) if len(l_) > 2]
+    axs[-1].legend(*list(zip(*real_legend_items)),
+                   bbox_to_anchor=(1, 1),
+                   markerscale=2.,
+                   edgecolor='white')
+    h[labels.index('selection lick')].set_edgecolor('white')
 
     plt.tight_layout()
 

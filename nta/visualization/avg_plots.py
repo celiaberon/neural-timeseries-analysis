@@ -18,16 +18,16 @@ import seaborn as sns
 from nta.events.align import get_lick_times
 
 
-def load_config_variables(section: str='color_palette') -> dict:
+def load_config_variables(section: str = 'color_palette') -> dict:
 
     '''
     Create dictionary containing parameter values that will be repeated
     across notebooks
-    
+
     Args:
-        section: 
+        section:
            Section name within configuration file.
-    
+
     Returns:
         config_variables:
             Dictionary containing variables and assigned values from config
@@ -37,7 +37,7 @@ def load_config_variables(section: str='color_palette') -> dict:
     # For color palette configuration only
     import matplotlib as mpl
     cpal = mpl.cm.RdBu_r(np.linspace(0, 1, 8))
-    
+
     config_file = configparser.ConfigParser()
     config_file.read("plot_config.ini")
 
@@ -51,8 +51,8 @@ def load_config_variables(section: str='color_palette') -> dict:
 
 def set_new_axes(n_iters: list,
                  *,
-                 behavior_hist: bool=True,
-                 figsize: tuple=None,
+                 behavior_hist: bool = True,
+                 figsize: tuple = None,
                  **kwargs):
 
     '''
@@ -65,7 +65,7 @@ def set_new_axes(n_iters: list,
             [total number of subplot groups, current subplot group]
         behavior_hist (bool):
             Whether or not to plot behavior distributions.
-        figsize: 
+        figsize:
             (width, height) dimensions.
 
     Returns:
@@ -82,25 +82,26 @@ def set_new_axes(n_iters: list,
     nrows = int(np.ceil(n_iters[0]/3))
     ncols = min(n_iters[0], 3)
 
-    if behavior_hist: # with behavior distributions, will be 2 plots per alignment
+    dims = (subplot_width*ncols, subplot_height*nrows)
+    if behavior_hist:  # 2 plots per alignment with behavior distributions
         fig, axs = plt.subplots(nrows=2*nrows, ncols=ncols,
-                                figsize=(subplot_width*ncols, subplot_height*nrows),
+                                figsize=dims,
                                 sharex=True,
-                                gridspec_kw={'height_ratios':(3,1)})    
-    else: # Otherwise single layer of lineplots for each alignment
+                                gridspec_kw={'height_ratios': (3, 1)})
+    else:  # Otherwise single layer of lineplots for each alignment
         fig, axs = plt.subplots(nrows=nrows, ncols=ncols,
-                                figsize=(subplot_width*ncols, subplot_height*nrows),
+                                figsize=dims,
                                 sharey=False, sharex=True)
-        if n_iters[0]==1:
-            axs = [axs, None] # need consistent dims for handling in plotting func
+        if n_iters[0] == 1:
+            axs = [axs, None]  # consistent dims for handling in plotting func
 
     return fig, axs
 
 
-def set_current_axes(axs, 
+def set_current_axes(axs,
                      *,
-                     n_iters: list=None,
-                     behavior_hist: bool=None,
+                     n_iters: list = None,
+                     behavior_hist: bool = None,
                      ):
 
     '''
@@ -109,7 +110,7 @@ def set_current_axes(axs,
 
     ncols = min(n_iters[0], 3)
 
-    if n_iters[0]>1:
+    if n_iters[0] > 1:
         ax1 = axs.flatten()[n_iters[1]]
         ax2 = axs.flatten()[n_iters[1]+ncols] if behavior_hist else None
         # n_iters[1] += 1 # mutable update globally
@@ -121,7 +122,7 @@ def set_current_axes(axs,
 
 def subsample_trial_types(trials: pd.DataFrame,
                           column: str,
-                          target_size: int=None) -> pd.DataFrame:
+                          target_size: int = None) -> pd.DataFrame:
 
     '''
     Subsample to target size for each trial type to compare effects of rare
@@ -134,10 +135,10 @@ def subsample_trial_types(trials: pd.DataFrame,
             Behavior variable to subsample condiitons within.
         target_size:
             Number of repetitions to sample from each group within column.
-    
+
     Returns:
         subsampled_trials:
-            Dataframe as subset of trials containing 
+            Dataframe as subset of trials containing
             N trials = target_size * number of unique conditions in column.
     '''
 
@@ -149,7 +150,7 @@ def subsample_trial_types(trials: pd.DataFrame,
         target_size = min_trial_type
 
     subsampled_trials = trials_.groupby(column).sample(n=target_size)
-    
+
     return subsampled_trials
 
 
@@ -158,10 +159,10 @@ def config_plot_cpal(*, cmap_colors=None, **kwargs):
     '''Set color palette with flexible input'''
 
     match cmap_colors:
-        case int(): # Sequential palette for numerical conditions
+        case int():  # Sequential palette for numerical conditions
             cpal = mpl.cm.RdBu(np.linspace(0, 1, cmap_colors))
             cpal = mpl.colors.LinearSegmentedColormap.from_list('cpal', cpal)
-        case (str() | dict()): # Use provided palette if given explicitly
+        case (str() | dict()):  # Use provided palette if given explicitly
             cpal = cmap_colors
         case _:
             cpal = 'deep'
@@ -171,22 +172,20 @@ def config_plot_cpal(*, cmap_colors=None, **kwargs):
 
 def plot_trial_type_comparison(ts: pd.DataFrame,
                                *,
-                               column: str=None,
-                            #    align_event: str=None,
-                               y_col: str=None,
-                               trial_units: bool=False,
-                               behavior_hist: bool=False,
-                               n_iters: list=None,
+                               column: str = None,
+                               y_col: str = None,
+                               trial_units: bool = False,
+                               behavior_hist: bool = False,
+                               n_iters: list = None,
                                axs=None,
                                fig=None,
                                error=('ci', 95),
                                **kwargs):
 
-    
     '''
     Plot lineplots of neural data aligned to behavioral/task events. Option
     to also plot alongside distribution of behavior events.
-    
+
     Args:
         ts:
             Timeseries of neural data also containing trial type information.
@@ -200,13 +199,13 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
             Whether to plot individual traces for each trial.
         behavior_hist:
             Whether to include plots for behavior timing distributions.
-        n_iters: 
+        n_iters:
             [number of total plot iterations, current plot iteration]
-        axs: 
+        axs:
             matplotlib.axes object to add plots into.
-        fig: 
+        fig:
             matplolib.figure object.
-        error: 
+        error:
             (error type, significance level)
         **kwargs:
             ls_col:
@@ -214,7 +213,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
             legend_set:
                 Whether or not to include legend in plot.
             ...
-    
+
     Returns:
         fig:
             New/updated figure object.
@@ -222,18 +221,18 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
             New/updated axes object.
     '''
 
-    sns.set(style='ticks', font_scale=1.0, rc={'axes.labelsize':11, 
-                                               'axes.titlesize':11,
-                                               'savefig.transparent':True,
+    sns.set(style='ticks', font_scale=1.0, rc={'axes.labelsize': 11,
+                                               'axes.titlesize': 11,
+                                               'savefig.transparent': True,
                                                'legend.title_fontsize': 11,
                                                'legend.fontsize': 10})
-    
-    if n_iters is None:
-        n_iters = [1,0]
 
-    # set up plot aesthetics and designate current ax1: lineplot, ax2: behavior.
+    if n_iters is None:
+        n_iters = [1, 0]
+
+    # Plot aesthetics and designate current ax1: lineplot, ax2: behavior.
     cpal = config_plot_cpal(**kwargs)
-    if n_iters[1]==0:
+    if n_iters[1] == 0:
         fig, axs = set_new_axes(n_iters=n_iters,
                                 behavior_hist=behavior_hist,
                                 **kwargs)
@@ -241,27 +240,27 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                                 n_iters=n_iters,
                                 behavior_hist=behavior_hist)
 
-    # Core plotting function regardless of individual trial traces or group mean.
-    window = kwargs.get('window', (1,2))
-    lineplot_core = partial(sns.lineplot, 
+    # Core plotting function regardless of individual trial traces or group
+    # mean.
+    lineplot_core = partial(sns.lineplot,
                             x=f'{y_col}_times',
                             y=y_col,
                             hue=column,
                             data=ts,
                             ax=ax1,
                             palette=cpal)
-    
+
     # Actual lineplot for event-aligned neural data.
     if trial_units:
         ax1 = lineplot_core(label=None,
-                           units='nTrial',
-                           estimator=None,
-                           alpha=0.9)
+                            units='nTrial',
+                            estimator=None,
+                            alpha=0.9)
     else:
         ax1 = lineplot_core(style=kwargs.get('ls_col', None),
                             n_boot=kwargs.get('n_boot', 1000),
                             errorbar=error,
-                            err_kws={'alpha':0.3},
+                            err_kws={'alpha': 0.3},
                             estimator=kwargs.get('estimator', 'mean'))
 
     ax1 = config_plot(ax1, y_col, column, **kwargs)
@@ -276,9 +275,9 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
 
 
 def plotting_wrapper(trials: pd.DataFrame,
-                     alignment_states: list=None,
-                     channel: str=None,
-                     window: tuple=(1,2),
+                     alignment_states: list = None,
+                     channel: str = None,
+                     window: tuple = (1, 2),
                      **kwargs):
 
     '''
@@ -292,18 +291,18 @@ def plotting_wrapper(trials: pd.DataFrame,
             List of events to plot aligned neural data to.
         channel:
             L or R hemisphere photometry channel.
-        **kwargs: 
+        **kwargs:
             See plot_trial_type_comparison().
-    
+
     Returns:
         fig:
             Figure object containing created and filled plot.
-        axs: 
+        axs:
             Axes object containing created and filled plot.
     '''
 
-    axs=None
-    fig=None
+    axs = None
+    fig = None
 
     # Default to plotting 3 main trial events.
     if alignment_states is None:
@@ -311,55 +310,55 @@ def plotting_wrapper(trials: pd.DataFrame,
 
     # Iteratively fill subplots with each event-alignd photometry trace.
     for plot_iter, event in enumerate(alignment_states, start=1):
-        n_iters=[len(alignment_states),plot_iter-1]
+        n_iters = [len(alignment_states), plot_iter-1]
         photometry_column = f'{event}_{channel}'
         exploded_trials = (trials.copy()
-                        .dropna(subset=[photometry_column])
-                        .explode(column=[photometry_column, 
-                                        f'{event}_{channel}_times'])
-                        )
+                           .dropna(subset=[photometry_column])
+                           .explode(column=[photometry_column,
+                                            f'{event}_{channel}_times'])
+                           )
         fig, axs = plot_trial_type_comparison(exploded_trials,
-                                            align_event=event,
-                                            y_col=photometry_column,
-                                            n_iters=n_iters,
-                                            legend_set=plot_iter>=n_iters[0],
-                                            fig=fig,
-                                            axs=axs,
-                                            window=window,
-                                            **kwargs)
+                                              align_event=event,
+                                              y_col=photometry_column,
+                                              n_iters=n_iters,
+                                              legend_set=plot_iter >= n_iters[0],
+                                              fig=fig,
+                                              axs=axs,
+                                              window=window,
+                                              **kwargs)
 
     return fig, axs
 
 
-def config_plot(ax, 
-                y_col: str, 
+def config_plot(ax,
+                y_col: str,
                 column: str,
-                legend_set: bool=False, 
-                ylim: tuple=(-2,3),
+                legend_set: bool = False,
+                ylim: tuple = (-2, 3),
                 ls_col=False,
-                window: tuple=(1,3),
+                window: tuple = (1, 3),
                 **kwargs):
 
     '''
     Configure plot aesthetics such as labeling 0 positions on axes
     and setting limits/legends/tick labels consistently.
     '''
-    
+
     align_event = y_col.split('_')[0]
-    ax.axvline(x=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0, 
+    ax.axvline(x=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0,
                label=None)
     ax.axhline(y=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0)
     ax.set(xlabel='Time (s)', ylabel='z-score', ylim=ylim)
     ax.text(x=-0.05, y=ylim[1] + 0.1*sum(ylim), s=align_event)
     ticks = ax.get_xticks()
     ax.set_xticks([int(tick) for tick in ticks if tick.is_integer()])
-    ax.set(xlim=(-window[0],window[1]))
+    ax.set(xlim=(-window[0], window[1]))
 
     if not legend_set:
         ax.legend().set_visible(False)
     else:
         ax.legend(bbox_to_anchor=(1, 1), loc='upper left', frameon=False,
-                title='' if ls_col else column)
+                  title='' if ls_col else column)
     sns.despine()
 
     return ax
@@ -370,7 +369,7 @@ def label_legend_unique_handles(ax, **kwargs):
     handles, labels = ax.get_legend_handles_labels()
     legend_reduced = dict(zip(labels, handles))
     ax.legend(legend_reduced.values(), legend_reduced.keys(),
-                bbox_to_anchor=(1,1), frameon=False, **kwargs)
+              bbox_to_anchor=(1, 1), frameon=False, **kwargs)
     return ax
 
 
@@ -378,57 +377,58 @@ def behavior_event_distributions(ts,
                                  y_col,
                                  ax,
                                  *,
-                                 graded_cue: bool=False,
-                                 legend_set: bool=False,
+                                 graded_cue: bool = False,
+                                 legend_set: bool = False,
                                  **kwargs):
 
     lick_times = get_lick_times(**kwargs)
 
-    # Default approach, calculate relative timing of 2 distributions to aligned event
-    state_colors={'Cue':sns.color_palette('colorblind')[3], 
-                  'Select':'darkgray', 
-                  'Consumption':'k'}
+    # Default approach, calculate relative timing of 2 distributions to
+    # aligned event.
+    state_colors = {'Cue': sns.color_palette('colorblind')[3],
+                    'Select': 'darkgray',
+                    'Consumption': 'k'}
     plotting_kwargs = {'color': True}
 
     align_event = y_col.split('_')[0]
-    
+
     if 'ENL' in align_event:
         ts_ = ts.copy().groupby('nTrial')['T_ENL'].nth(0)
         lick_times['T_ENL'] = lick_times['nTrial'].map(ts_)
         plotting_kwargs = {'palette': sns.color_palette('Greys', n_colors=6)[1:],
-                           'hue':'T_ENL'}
-        
-    elif 'fake_event' in align_event: # For null comparisons
+                           'hue': 'T_ENL'}
+
+    elif 'fake_event' in align_event:  # For null comparisons
         fake_events = ts.query('fake_event==1')
         fake_event_trials = fake_events.nTrial.unique()
         fake_event_times = fake_events.groupby('nTrial').nth(0)['trial_clock'].values
         lick_times['fake_event'] = np.nan
         lick_times.query('nTrial.isin(@fake_event_trials)')['fake_event'] = fake_event_times
-        
+
     ylim_ub = []
     for event in ['Cue', 'Select', 'Consumption']:
 
         if graded_cue:
-            raise(NotImplementedError)
+            raise NotImplementedError
             # plotting_kwargs = {'hue': column, 'palette': kwargs.get('cpal')}
             # ts_ = ts.copy().groupby('nTrial')[column].nth(0)
             # lick_times[column] = lick_times['nTrial'].map(ts_)
         elif plotting_kwargs.get('color', None) is not None:
             plotting_kwargs['color'] = state_colors[event]
 
-        if event==align_event:
+        if event == align_event:
             ax.axvline(x=0, color=state_colors[event])
         else:
             lick_times[f'{event} time'] = lick_times[event] - lick_times[align_event]
             sns.histplot(data=lick_times, x=f'{event} time', ax=ax,
-                        binwidth=0.05, alpha=0.7,
-                        label=event, stat='probability',
-                        element='step', linewidth=0, edgecolor=None,
-                        **plotting_kwargs)
+                         binwidth=0.05, alpha=0.7,
+                         label=event, stat='probability',
+                         element='step', linewidth=0, edgecolor=None,
+                         **plotting_kwargs)
             ylim_ub.append(ax.get_ylim()[1])
 
-    ax.set(ylabel='fraction\ntrials', xlabel='Time (s)', ylim=(0,max(ylim_ub)))
-            
+    ax.set(ylabel='fraction\ntrials', xlabel='Time (s)', ylim=(0, max(ylim_ub)))
+
     if not legend_set:
         ax.legend().set_visible(False)
 
@@ -437,14 +437,14 @@ def behavior_event_distributions(ts,
         #     legend_labels,legend_handles=ax.get_legend_handles_labels()
         #     ax.legend(legend_labels[:: len(legend_labels) // 2],
         #             legend_handles[:: len(legend_labels) // 2],
-        #             frameon=False, fontsize=12, markerscale=0.8)        
+        #             frameon=False, fontsize=12, markerscale=0.8)
         # else:
         def custom_patch(key, color):
             from matplotlib.patches import Patch
             return Patch(facecolor=color, edgecolor=None, label=key, alpha=0.7)
         legend_elements = [custom_patch(key, color) for key, color in state_colors.items()]
-        ax.legend(handles=legend_elements, bbox_to_anchor=(1,1.5), 
-                    loc='upper left', frameon=False, markerscale=0.5, 
-                    )
+        ax.legend(handles=legend_elements, bbox_to_anchor=(1, 1.5),
+                  loc='upper left', frameon=False, markerscale=0.5,
+                  )
 
     return ax

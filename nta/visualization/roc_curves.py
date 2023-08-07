@@ -8,9 +8,10 @@ from nta.features.select_trials import resample_and_balance
 from nta.utils import repeat_and_store
 
 sns.set(style='ticks',
-        rc={'axes.labelsize':12, 'axes.titlesize':12,
-            'savefig.transparent':True, 'legend.frameon':False}
+        rc={'axes.labelsize': 12, 'axes.titlesize': 12,
+            'savefig.transparent': True, 'legend.frameon': False}
         )
+
 
 def calc_dprime(dists: np.array) -> float:
 
@@ -31,7 +32,7 @@ def calc_dprime(dists: np.array) -> float:
     mu_dists = np.mean(dists, axis=1)
     var_dists = np.var(dists, axis=1)
 
-    dprime_numerator = np.abs(np.diff(mu_dists)[0]) 
+    dprime_numerator = np.abs(np.diff(mu_dists)[0])
 
     # No assumptions of equal variance: square root of average variance.
     dprime_denominator = np.sqrt(np.mean(var_dists))
@@ -41,14 +42,14 @@ def calc_dprime(dists: np.array) -> float:
     return dprime
 
 
-# Repeatedly sample with replacement to get bootstrapped distribution of 
+# Repeatedly sample with replacement to get bootstrapped distribution of
 # d-prime values.
-@repeat_and_store(100) 
+@repeat_and_store(100)
 def calc_dprime_sample(*,
-                       seed: int=None,
-                       trials: pd.DataFrame=None,
-                       neural_event: str='Consumption_mean',
-                       pred_behavior: str='',
+                       seed: int = None,
+                       trials: pd.DataFrame = None,
+                       neural_event: str = 'Consumption_mean',
+                       pred_behavior: str = '',
                        **kwargs) -> float:
 
     '''
@@ -80,7 +81,7 @@ def calc_dprime_sample(*,
                                          necessary_cols=[neural_event],
                                          seed=seed,
                                          **kwargs)
-    
+
     # Store distribution of neural events within each class of pred_behavior.
     neural_dists_by_class = np.zeros((2, len(balanced_data)//2))
     for i, grp in balanced_data.groupby(pred_behavior):
@@ -93,16 +94,16 @@ def calc_dprime_sample(*,
     return sample_dprime
 
 
-# Repeatedly sample with replacement to get bootstrapped distribution of ROC 
+# Repeatedly sample with replacement to get bootstrapped distribution of ROC
 # values.
 @repeat_and_store(100)
 def calc_roc_sample(*,
-                    seed: int=None,
-                    trials: pd.DataFrame=None,
-                    neural_event: str='Consumption_grnL_mean',
-                    pred_behavior: str='',
+                    seed: int = None,
+                    trials: pd.DataFrame = None,
+                    neural_event: str = 'Consumption_grnL_mean',
+                    pred_behavior: str = '',
                     **kwargs) -> tuple[np.array, np.array]:
-    
+
     '''
     Calculate Receiver Operating Characteristic (ROC) curve for resampled
     trials balanced with respect to a designated trial variable. ROC curve
@@ -135,15 +136,15 @@ def calc_roc_sample(*,
                                          necessary_cols=[neural_event],
                                          seed=seed,
                                          **kwargs)
-    
+
     # Set FPR against which TPR will be evaluated.
     mean_fpr = np.linspace(-1, 1, 100)
 
     # Calculate FPR and TPR predicting positive cases (=1) of behavior event
-    # using values of neural measurements. 
-    fpr, tpr, _ = metrics.roc_curve(balanced_data[pred_behavior]==1,
+    # using values of neural measurements.
+    fpr, tpr, _ = metrics.roc_curve(balanced_data[pred_behavior] == 1,
                                     balanced_data[neural_event])
-    
+
     # Interpolate TPR into fixed FPR steps.
     interp_tpr = np.interp(mean_fpr, fpr, tpr)
 
@@ -153,19 +154,19 @@ def calc_roc_sample(*,
 def plot_roc_with_auc(fpr: np.array,
                       tprs: list[np.array],
                       ax=None,
-                      palette: dict[str, np.array]=None,
-                      label: str=None,
-                      text_offset: int|float=0,
-                      plot_auc: bool=True,
+                      palette: dict[str, np.array] = None,
+                      label: str = None,
+                      text_offset: int | float = 0,
+                      plot_auc: bool = True,
                       **kwargs):
-    
+
     '''
     Plot ROC curve as True Positive Rate vs. False Positive Rate.
 
     Args:
         fpr:
             Array of False Positive Rates as x-variable.
-            Note: FPR given at fixed positions is identical across samples, 
+            Note: FPR given at fixed positions is identical across samples,
             so single array is sufficient for multiple samples.
         tprs:
             Array or list of arrays from multiple samples, containing True
@@ -187,9 +188,9 @@ def plot_roc_with_auc(fpr: np.array,
         ax:
             Populated matplotlib axis object.
     '''
-    
+
     if ax is None:
-        fig, ax = plt.subplots(figsize=(2.5,2.5))
+        fig, ax = plt.subplots(figsize=(2.5, 2.5))
     if palette is None:
         palette = {}
 
@@ -206,29 +207,29 @@ def plot_roc_with_auc(fpr: np.array,
     # Shading representing SEM from boostrapped mean for TPR.
     ax.fill_between(fpr, y1=mean_tpr+sem_tpr, y2=mean_tpr-sem_tpr, alpha=0.5,
                     color=color)
-    
+
     if plot_auc:
         AUC = metrics.auc(x=fpr, y=mean_tpr)
         custom_label = f'{label}={round(AUC, 2)}'
         ax.text(x=0.5, y=0.1+text_offset, s=custom_label, color=color,
                 size=12)
 
-    ax.plot([0,1], [0,1], color='k', ls='--', lw=0.5)
+    ax.plot([0, 1], [0, 1], color='k', ls='--', lw=0.5)
     ax.set(xlabel='False Positive Rate',
            xticks=[0, 0.5, 1],
            xlim=(-0.02, 1),
            ylabel='True Positive Rate',
-           yticks=[0,0.5, 1],
+           yticks=[0, 0.5, 1],
            ylim=(-0.02, 1.02),
            )
-    
+
     return ax
 
 
 def multiclass_roc_curves(trials: pd.DataFrame,
-                          neural_event: str='Consumption_grnL_mean',
-                          pred_behavior: str='',
-                          trial_variable: str='Reward',
+                          neural_event: str = 'Consumption_grnL_mean',
+                          pred_behavior: str = '',
+                          trial_type: str = 'Reward',
                           **kwargs):
 
     '''
@@ -244,36 +245,36 @@ def multiclass_roc_curves(trials: pd.DataFrame,
         pred_behavior:
             Trial variable (defined by binary and mutually exclusive values)
             that is the object of classification from neural_event.
-        trial_variable:
+        trial_type:
             Trial variable on which to condition each ROC curve.
-        
+
     Returns:
         ax:
             Matplotlib axes object containing and ROC curve for each unique
-            class within `trial_variable` of `trials`.
+            class within `trial_type` of `trials`.
     '''
 
-    ax=None
-    for i, (label, trial_type) in enumerate(trials.groupby(trial_variable, dropna=True)):
+    ax = None
+    for i, (key, grp) in enumerate(trials.groupby(trial_type, dropna=True)):
 
-        # Bootstrap (FPR, TPR) for each trial type defined by trial_variable.
-        bootstrapped_rocs = calc_roc_sample(trials=trial_type,
+        # Bootstrap (FPR, TPR) for each trial type defined by trial_type.
+        bootstrapped_rocs = calc_roc_sample(trials=grp,
                                             neural_event=neural_event,
                                             pred_behavior=pred_behavior,
-                                            **kwargs)        
+                                            **kwargs)
         # Unpack bootstrapped arrays into their respective lists.
         tprs = []
-        [tprs.append(tpr) for _, tpr,  in bootstrapped_rocs]
-        
+        [tprs.append(tpr) for _, tpr, in bootstrapped_rocs]
+
         # All FPRs across samples are identical, so onkly need single array.
         fpr = bootstrapped_rocs[0][0]
 
         text_offset = i * (1/6)
-        ax = plot_roc_with_auc(fpr, tprs, label=label, ax=ax,
+        ax = plot_roc_with_auc(fpr, tprs, label=key, ax=ax,
                                text_offset=text_offset, **kwargs)
 
     sns.despine()
     plt.tight_layout()
-    plt.legend(bbox_to_anchor=(1,1), loc='upper left', title=trial_variable)
-    
+    plt.legend(bbox_to_anchor=(1, 1), loc='upper left', title=trial_type)
+
     return ax

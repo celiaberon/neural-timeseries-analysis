@@ -32,7 +32,7 @@ def create_combo_col(data: pd.DataFrame, grouping_levels: list):
     data_ = data.copy()
     data_['combo_col'] = ''
     for i, col in enumerate(grouping_levels):
-        prefix = '' if i==0 else '_'
+        prefix = '' if i == 0 else '_'
         data_['combo_col'] += prefix + data_[col].astype(str)
 
     return data_
@@ -41,7 +41,7 @@ def create_combo_col(data: pd.DataFrame, grouping_levels: list):
 def set_peak_function(rew: (int | bool),
                       state: str,
                       sensor: str,
-                      override: Callable=None,
+                      override: Callable = None,
                       **kwargs) -> Callable:
     '''
     Select function to use for peak calculation based on task state and
@@ -67,11 +67,11 @@ def set_peak_function(rew: (int | bool),
         return peak_func
 
     # detecting peaks with opposite sign for reward/no reward
-    peak_funcs = {1:np.argmax, 0:np.argmin, -1:np.argmin}
+    peak_funcs = {1: np.argmax, 0: np.argmin, -1: np.argmin}
     if sensor != 'DA':
         peak_func = np.argmax
     else:
-        peak_func = peak_funcs[rew] if state=='Consumption' else np.argmax
+        peak_func = peak_funcs[rew] if state == 'Consumption' else np.argmax
 
     return peak_func
 
@@ -80,10 +80,10 @@ def find_group_peak_time(ts: pd.DataFrame,
                          peak_func: Callable,
                          times_col: str,
                          channel_col: str,
-                         max_peak_delay: float=0.5):
-    
+                         max_peak_delay: float = 0.5):
+
     '''
-    Use the aggregate (mean) trace for a trial type to find the location (in 
+    Use the aggregate (mean) trace for a trial type to find the location (in
     time) of the average "peak" fluorescence.
 
     Args:
@@ -107,18 +107,18 @@ def find_group_peak_time(ts: pd.DataFrame,
     # Find group mean peak time to use for trial peak calculations.
     ts_peak_time_window = ts.loc[ts[times_col].between(0, max_peak_delay)]
     mean_trace = ts_peak_time_window.groupby(times_col)[channel_col].mean()
-    center_idx = peak_func(mean_trace) # peak time index
-    peak_time = mean_trace.index[center_idx] # peak time in seconds
+    center_idx = peak_func(mean_trace)  # peak time index
+    peak_time = mean_trace.index[center_idx]  # peak time in seconds
 
     return peak_time
 
 
 def group_peak_metrics(trials: pd.DataFrame,
-                     grouping_levels: str|list[str],
-                     channel: str,
-                     sensor: str='DA',
-                     states: list[str]=None,
-                     **kwargs) -> pd.DataFrame:
+                       grouping_levels: str | list[str],
+                       channel: str,
+                       sensor: str = 'DA',
+                       states: list[str] = None,
+                       **kwargs) -> pd.DataFrame:
 
     '''
     Find mean peak timing for group of trials and use this to calculate metric
@@ -153,7 +153,7 @@ def group_peak_metrics(trials: pd.DataFrame,
 
     peak_times = defaultdict(lambda: defaultdict(list))
     trials_ = trials.copy()
-    
+
     if isinstance(grouping_levels, str):
         grouping_levels = [grouping_levels]
 
@@ -169,12 +169,12 @@ def group_peak_metrics(trials: pd.DataFrame,
 
         # Convert to longform timeseries and drop NaNs from grouping columns.
         exp_trials = (trials_
-                     .explode(column=[channel_col, times_col])
-                     .dropna(subset=grouping_levels +['Reward']))
+                      .explode(column=[channel_col, times_col])
+                      .dropna(subset=grouping_levels + ['Reward']))
         exp_trials = create_combo_col(exp_trials, grouping_levels)
-        
+
         # Iterate over each unique condition.
-        for peak_group_id, peak_group in exp_trials.groupby('combo_col'): 
+        for peak_group_id, peak_group in exp_trials.groupby('combo_col'):
 
             # Iterate over each reward outcome in condition and use
             # appropriate function to detect peak for group, storing mean
@@ -183,27 +183,28 @@ def group_peak_metrics(trials: pd.DataFrame,
                 peak_func = set_peak_function(rew, state, sensor)
 
                 # Find group mean peak time for trial peak calculations.
-                peak_time = find_group_peak_time(peak_group_outcome, 
-                                                    peak_func,
-                                                    times_col,
-                                                    channel_col)
+                peak_time = find_group_peak_time(peak_group_outcome,
+                                                 peak_func,
+                                                 times_col,
+                                                 channel_col)
 
                 # Store group peak time by trial for single trial peak calc.
                 trials_ids = peak_group_outcome.nTrial.unique()
                 trial_times = np.repeat(peak_time, len(trials_ids))
                 peak_times[peak_group_id][times_col].extend(trial_times)
                 peak_times[peak_group_id][f'{state}_trials'].extend(trials_ids)
-            
+
         # Peak times indexed by trial for mapping into original df. Flattened
         # across combination conditions.
         peak_times_state = (pd.DataFrame(peak_times)
-                    .T
-                    .explode(column=[times_col, f'{state}_trials'])
-                    .set_index(f'{state}_trials'))
-        trials_[f'{channel_col}_peak_time'] = trials_['nTrial'].map(peak_times_state[times_col])
+                            .T
+                            .explode(column=[times_col, f'{state}_trials'])
+                            .set_index(f'{state}_trials'))
+        trials_[f'{channel_col}_peak_time'] = (trials_['nTrial']
+                                               .map(peak_times_state[times_col]))
 
         # Calculate peak magnitude around mean peak time for individual trials.
-        trials_ = group_peak_quantification(trials_,state, channel, **kwargs)
+        trials_ = group_peak_quantification(trials_, state, channel, **kwargs)
 
     return trials_
 
@@ -212,9 +213,9 @@ def group_peak_quantification(trials: pd.DataFrame,
                               state: str,
                               channel: str,
                               *,
-                              offset: bool=True,
-                              hw: int=2,
-                              agg_funcs: list[str]=['mean']) -> pd.DataFrame:
+                              offset: bool = True,
+                              hw: int = 2,
+                              agg_funcs: list[str] = ['mean']) -> pd.DataFrame:
 
     '''
     Calculate peak magnitude for each trial based on average timing of sensor
@@ -250,7 +251,7 @@ def group_peak_quantification(trials: pd.DataFrame,
     '''
 
     # Define timepoint (in seconds) preceding align event to offset baseline.
-    T_BASELINE = -0.04 
+    T_BASELINE = -0.04
 
     channel_col = f'{state}_{channel}'
     times_col = f'{state}_{channel}_times'
@@ -258,11 +259,11 @@ def group_peak_quantification(trials: pd.DataFrame,
     trials_ = trials.copy()
     exp_trials = (trials_
                   .explode(column=[channel_col, times_col])
-                  .reset_index(drop=True)) 
+                  .reset_index(drop=True))
 
     # Get index of rows at group peak time and expand to permissible range for
-    # individual trial peak time. 
-    group_peak_times = exp_trials[times_col]==exp_trials[f'{channel_col}_peak_time']
+    # individual trial peak time.
+    group_peak_times = exp_trials[times_col] == exp_trials[f'{channel_col}_peak_time']
     idcs = exp_trials.loc[group_peak_times].index.values
     snippet_idcs = list(itertools.chain(*[np.arange(x-hw, x+hw) for x in idcs]))
 
@@ -272,27 +273,27 @@ def group_peak_quantification(trials: pd.DataFrame,
         # If column previously calculated, make sure it's fully overwritten.
         if peak_col in trials_.columns:
             trials_ = trials_.drop(columns=[peak_col])
-        
+
         # Grab subset of rows for peak averaging.
         agg_df = (exp_trials.loc[snippet_idcs]
-              .groupby('nTrial', as_index=True)
-              .agg({channel_col:af})
-              .rename(columns={channel_col:peak_col}))
+                  .groupby('nTrial', as_index=True)
+                  .agg({channel_col: af})
+                  .rename(columns={channel_col: peak_col}))
 
         # Add column to trial data mapping peak metric for each trial.
-        trials_ = trials_.merge(agg_df, left_on='nTrial', 
+        trials_ = trials_.merge(agg_df, left_on='nTrial',
                                 right_index=True, how='left')
         trials_[peak_col] = trials_[peak_col].astype('float')
 
     if offset:
         # At the moment offset everything by timepoint preceding cue.
-        if (state!='Cue') and ('Cue_offset' in exp_trials.columns):
-            trials_[peak_col] = trials_[peak_col] - trials_[f'Cue_offset']
+        if (state != 'Cue') and ('Cue_offset' in exp_trials.columns):
+            trials_[peak_col] = trials_[peak_col] - trials_['Cue_offset']
         else:
-            offset_df = (exp_trials.loc[exp_trials[times_col]==T_BASELINE]
+            offset_df = (exp_trials.loc[exp_trials[times_col] == T_BASELINE]
                          .set_index('nTrial')[[channel_col]]
                          .rename(columns={channel_col: f'{state}_offset'}))
-            trials_ = trials_.merge(offset_df, left_on='nTrial', 
+            trials_ = trials_.merge(offset_df, left_on='nTrial',
                                     right_index=True, how='left')
             trials_[peak_col] -= trials_[f'{state}_offset']
 
