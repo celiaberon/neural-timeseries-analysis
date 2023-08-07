@@ -1,9 +1,10 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import numpy.random as npr
 import pandas as pd
 import scipy.signal as signal
-import numpy.random as npr
-import matplotlib.pyplot as plt
 import seaborn as sns
+
 
 class HeadfixedTask:
 

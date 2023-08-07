@@ -3,11 +3,13 @@ Created on Fri Aug 12 13:30:18 2022
 
 @author: celiaberon
 """
-import pandas as pd
-from collections import defaultdict
-import numpy as np
 import itertools
+from collections import defaultdict
 from typing import Callable
+
+import numpy as np
+import pandas as pd
+
 
 def create_combo_col(data: pd.DataFrame, grouping_levels: list):
 

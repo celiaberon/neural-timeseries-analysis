@@ -2,10 +2,13 @@
 @author: celiaberon
 '''
 
-import pandas as pd
-import numpy as np
 from functools import partial
+
+import numpy as np
+import pandas as pd
+
 from nta.events.quantify import group_peak_metrics
+
 
 def get_event_indices(timeseries: pd.DataFrame,
                       *,

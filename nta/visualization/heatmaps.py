@@ -1,11 +1,12 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from functools import partial
+
 import matplotlib as mpl
-from nta.events.align import (sort_by_trial_type,
-                             trials_by_time_array)
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+from nta.events.align import sort_by_trial_type, trials_by_time_array
 from nta.features.select_trials import subsample_trial_types
 
 sns.set(style='whitegrid',

@@ -6,13 +6,15 @@ Created on Mon Jan 17 15:22:38 2022
 @author: celiaberon
 """
 
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import matplotlib as mpl
 import configparser
 from functools import partial
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
 from nta.events.align import get_lick_times
 
 

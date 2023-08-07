@@ -6,11 +6,13 @@ Created on Fri Aug 12 13:30:18 2022
 @author: celiaberon
 """
 
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
 from itertools import chain
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
 
 def initialize_peak_fig(states,
                         *,

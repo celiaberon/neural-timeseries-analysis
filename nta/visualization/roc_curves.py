@@ -1,8 +1,9 @@
-import numpy as np
 import matplotlib.pyplot as plt
-from sklearn import metrics
-import seaborn as sns
+import numpy as np
 import pandas as pd
+import seaborn as sns
+from sklearn import metrics
+
 from nta.features.select_trials import resample_and_balance
 from nta.utils import repeat_and_store
 
