@@ -6,6 +6,8 @@ Created on Tue May 19 20:53:07 2020
 @author: celiaberon
 """
 
+import functools
+
 import numpy as np
 import pandas as pd
 import scipy.signal as signal
@@ -332,6 +334,24 @@ def resample_and_align(beh_timeseries: pd.DataFrame,
     return aligned_df
 
 
+def set_to_same_clock(ts1, ts2):
+
+    '''
+    ts1:
+        Timeseries of data collection started first.
+    ts2:
+        Timeseries of data collection started second (used as official sync clock).
+    '''
+
+    ts1_, ts2_ = ts1.copy(), ts2.copy()
+    aligned_start_time = ts1_.clock.iloc[0]
+    real_clock_start = ts2_.clock.iloc[0]
+    adjustment_time = aligned_start_time - real_clock_start
+    ts1_['clock'] -= round(adjustment_time, 3)
+
+    return ts1_
+
+
 def align_behav_photo(beh_timeseries: pd.DataFrame,
                       photo_timeseries: pd.DataFrame,
                       **kwargs) -> pd.DataFrame:
@@ -384,4 +404,47 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
     offset_time = aligned_start_time - true_start_time
     print(f'shift into behavior by {offset_time} seconds')
 
+    # Match clocks start time once dataframes are aligned.
+    beh_ts_trimmed = set_to_same_clock(beh_ts_trimmed, photo_ts_trimmed)
+
     return beh_ts_trimmed, photo_ts_trimmed
+
+
+def find_nearest_time(all_times, x):
+
+    return np.argmin(np.abs(all_times - x))
+
+
+def map_events_by_time(target_ts, orig_ts, event_col):
+
+    onset_only_LUT = {'iSpout': True,
+                      'Select': True,
+                      'ENLP': True,
+                      'CueP': True,
+                      'outcome_licks': True,
+                      'fromBehSys': True}
+
+    onset_only = onset_only_LUT.get(event_col, False)
+
+    target_ts_ = target_ts.copy()
+
+    if onset_only:
+        events = orig_ts.query(f'{event_col}.diff() > 0')
+    else:
+        events = orig_ts.query(f'{event_col}.diff().ne(0)')
+    event_times = events.clock.values
+    event_idcs = list(map(functools.partial(find_nearest_time, target_ts_.clock), event_times))
+    event_ids = events[event_col].values
+
+    # For impulse events where on/off indices are the same.
+    if onset_only:
+        target_ts_[event_col] = 0
+        target_ts_.loc[event_idcs, event_col] = event_ids
+
+    # For step functions need to fill between onset and offset.
+    else:
+        target_ts_[event_col] = np.nan
+        target_ts_.loc[event_idcs, event_col] = events[event_col].values
+        target_ts_[event_col] = target_ts_[event_col].ffill()
+
+    return target_ts_
