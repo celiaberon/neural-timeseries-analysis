@@ -204,7 +204,6 @@ def rolling_demodulation(trace: np.array,
                                     window=win,
                                     nperseg=nperseg,
                                     noverlap=noverlap)
-
     power_spectra = np.abs(Zxx)
     freq_ind = np.argmin(np.abs(f - carrier_freq))
     # frequency_resolution = np.diff(f)[0]
@@ -231,7 +230,6 @@ def process_trace(raw_photoms: list[np.array],
 
     for label, raw_trace, carrier in zip(labels, raw_photoms, carriers):
         detrend_trace = rolling_zscore(raw_trace, detrend_win, fill_value=0)
-        # processed_trace[f'detrended_{label}'] = detrend_trace
 
         power_spectra, t = rolling_demodulation(detrend_trace, carrier,
                                                 **kwargs)
@@ -304,7 +302,7 @@ def extract_metadata_tdt(tdt_file, task_id: str = 'hf_DAB') -> pd.DataFrame:
             sampling/carrier frequencies.
     '''
 
-    metadata = defaultdict([])
+    metadata = defaultdict(list)
 
     # Determine fibers that were on from standard deviation on data stream.
     active_fibers = [fiber for fiber in [1, 2] if
@@ -318,7 +316,7 @@ def extract_metadata_tdt(tdt_file, task_id: str = 'hf_DAB') -> pd.DataFrame:
     for fiber in active_fibers:
 
         # Set left/right label names to correspond to each active fiber.
-        metadata['fiber_references'].append(f'fiber_{fiber_to_side_keys[fiber]}_grn')
+        metadata['fiber_references'].append(f'grn{fiber_to_side_keys[fiber]}')
 
         # Grab expected carrier frequency for each fiber from tdt.
         metadata['carrier_freq'].append(tdt_file.scalars[f'Fi{fiber}i'].data[1, 0])
@@ -326,7 +324,11 @@ def extract_metadata_tdt(tdt_file, task_id: str = 'hf_DAB') -> pd.DataFrame:
         # Grab sampling frequency for each fiber from tdt.
         metadata['sampling_freq'].append(tdt_file.streams[f'Fi{fiber}r'].fs)
 
-    return pd.DataFrame(data=metadata).set_index('fiber_references')
+        metadata['fiber_sig'].append(tdt_file.streams[f'Fi{fiber}r'].data[2])
+
+        metadata['carrier_sig'].append(tdt_file.streams[f'Fi{fiber}r'].data[2])
+
+    return metadata #pd.DataFrame(data=metadata).set_index('fiber_references')
 
 
 # def offline_demodulation(data,

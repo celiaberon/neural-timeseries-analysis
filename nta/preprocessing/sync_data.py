@@ -151,7 +151,7 @@ def bins_per_trial_behavior(beh_timeseries: pd.DataFrame) -> tuple:
     ts_ = beh_timeseries.copy()
 
     try:
-        ts_.query('sync_pulse==1').index.tolist()
+        trial_starts = ts_.query('sync_pulse==1').index.tolist()
 
     except Exception:
         print('no sync pulse for 23-29, using old ENL method')
@@ -344,10 +344,13 @@ def set_to_same_clock(ts1, ts2):
     '''
 
     ts1_, ts2_ = ts1.copy(), ts2.copy()
-    aligned_start_time = ts1_.clock.iloc[0]
-    real_clock_start = ts2_.clock.iloc[0]
+    aligned_start_time = ts1_.session_clock.iloc[0]
+    real_clock_start = ts2_.session_clock.iloc[0]
     adjustment_time = aligned_start_time - real_clock_start
-    ts1_['clock'] -= round(adjustment_time, 3)
+    ts1_['session_clock'] -= round(adjustment_time, 3)
+
+    # Time in seconds needed to shift for alignment (sanity check).
+    print(f'shift into behavior by {adjustment_time} seconds')
 
     return ts1_
 
@@ -399,8 +402,8 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
     beh_ts_trimmed = beh_ts_.loc[first_beh_idx:last_beh_idx].reset_index(drop=True)
 
     # Time in seconds needed to shift for alignment (sanity check).
-    aligned_start_time = beh_ts_trimmed.clock.iloc[0]
-    true_start_time = beh_ts_.clock.iloc[0]
+    aligned_start_time = beh_ts_trimmed.session_clock.iloc[0]
+    true_start_time = beh_ts_.session_clock.iloc[0]
     offset_time = aligned_start_time - true_start_time
     print(f'shift into behavior by {offset_time} seconds')
 
@@ -432,8 +435,8 @@ def map_events_by_time(target_ts, orig_ts, event_col):
         events = orig_ts.query(f'{event_col}.diff() > 0')
     else:
         events = orig_ts.query(f'{event_col}.diff().ne(0)')
-    event_times = events.clock.values
-    event_idcs = list(map(functools.partial(find_nearest_time, target_ts_.clock), event_times))
+    event_times = events.session_clock.values
+    event_idcs = list(map(functools.partial(find_nearest_time, target_ts_.session_clock), event_times))
     event_ids = events[event_col].values
 
     # For impulse events where on/off indices are the same.
