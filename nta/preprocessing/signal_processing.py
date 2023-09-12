@@ -5,9 +5,6 @@ import numpy as np
 import pandas as pd
 from scipy import signal
 
-# sys.path.append('/Users/celiaberon/anaconda/bin')
-# from hyphyber.util.sig import gen_sine, downsample, demodulate, fit_reference
-
 
 def detrend_signal(raw_signal: pd.Series) -> pd.Series:
 
@@ -244,172 +241,64 @@ def process_trace(raw_photoms: list[np.array],
     return processed_trace
 
 
-# def initialize_demod_df(data: pd.DataFrame,
-#                         metadata: dict,
-#                         downsample_fs: int,
-#                         threshold: float = 0.5):
+def get_tdt_streams(tdt_data):
 
-#     '''
-#     Create datframe with behavior/neural data sync pulses at sampling rate
-#     used for demodulated data.
+    # Get trace indices from meta_info
+    idcs = {'carrier_g': 0,
+            'carrier_r': 1,
+            'photom_g': 2,
+            'photom_r': 3}
 
-#     Args:
-#         data:
-#             Timeseries data loaded in from tdt directly.
-#         metadata:
-#             Metadata containing sampling frequency of raw timeseries.
-#         downsample_fs:
-#             Target frequency after downsampling.
-#         threshold:
-#             Threshold for converting downsampled/smoothed signal back into
-#             binary pulse.
+    fibers = {'right': 1, 'left': 2}  # just as a note
+    carrier_g_right = tdt_data.streams.Fi1r.data[idcs.get("carrier_g", None)]
+    carrier_r_right = tdt_data.streams.Fi1r.data[idcs.get("carrier_r", None)]
+    photom_g_right = tdt_data.streams.Fi1r.data[idcs.get("photom_g", None)]
+    photom_r_right = tdt_data.streams.Fi1r.data[idcs.get("photom_r", None)]
 
-#     Returns:
-#         demod_df:
-#             Dataframe containing bidirection sync pulses at downsample_fs.
-#     '''
+    carrier_g_left = tdt_data.streams.Fi2r.data[idcs.get("carrier_g", None)]
+    carrier_r_left = tdt_data.streams.Fi2r.data[idcs.get("carrier_r", None)]
+    photom_g_left = tdt_data.streams.Fi2r.data[idcs.get("photom_g", None)]
+    photom_r_left = tdt_data.streams.Fi2r.data[idcs.get("photom_r", None)]
 
-#     if metadata.task_id.values[0].startswith('hf'):
-#         toBeh = (downsample(data['toBeh'], metadata.sampling_freq.values[0],
-#                             downsample_fs, method='polyphase') > threshold
-#                  .astype('int'))
-#         froG = (downsample(data['froG'], metadata.sampling_freq.values[0],
-#                            downsample_fs, method='polyphase') > threshold)
+    input_carrier_g_right = tdt_data.scalars.Fi1i.data[1][0]
+    input_carrier_r_right = tdt_data.scalars.Fi1i.data[4][0]
+    input_carrier_g_left = tdt_data.scalars.Fi2i.data[1][0]
+    input_carrier_r_left = tdt_data.scalars.Fi2i.data[4][0]
 
-#         demod_df = pd.DataFrame(data={'toBehSys': toBeh,
-#                                       'fromBehSys': froG})
-
-#     else:
-#         ...
-
-#     return demod_df
-
-
-def extract_metadata_tdt(tdt_file, task_id: str = 'hf_DAB') -> pd.DataFrame:
-
-    '''
-    Extract basic metadata for fiber photometry from tdt file format.
-
-    Args:
-        tdt_file:
-            Data structure loaded in with tdt software.
-        task_id:
-            Name referencing behavior task.
-
-    Returns:
-        metadata:
-            Dataframe containing fibers to analyze and corresponding
-            sampling/carrier frequencies.
-    '''
-
-    metadata = defaultdict(list)
+    # Get trace names and store in this list for ingestion
+    labels = np.array(('grnR', 'redR', 'grnL', 'redL'))
+    raw_photoms: list[np.array] = np.array([photom_g_right, photom_r_right,
+                                   photom_g_left, photom_r_left])
+    raw_carriers: list[np.array] = np.array([carrier_g_right, carrier_r_right,
+                                    carrier_g_left, carrier_r_left])
+    input_carriers: list[float] = np.array([input_carrier_g_right, input_carrier_r_right,
+                                   input_carrier_g_left, input_carrier_r_left])
 
     # Determine fibers that were on from standard deviation on data stream.
-    active_fibers = [fiber for fiber in [1, 2] if
-                     np.std(tdt_file.streams[f'Fi{fiber}r'].data[0][5:] > 0.05)]
-    metadata['active_fibers'] = active_fibers
-    metadata['task_id'] = task_id
-    # Warning: this comes from user decisions and should probably be set by
-    # experimenter!
-    fiber_to_side_keys = {1: 'R', 2: 'L'}
+    active_channels = [i for i, cf in enumerate(raw_carriers) if
+                       np.std(cf[100000:]) > 0.05]
 
-    for fiber in active_fibers:
-
-        # Set left/right label names to correspond to each active fiber.
-        metadata['fiber_references'].append(f'grn{fiber_to_side_keys[fiber]}')
-
-        # Grab expected carrier frequency for each fiber from tdt.
-        metadata['carrier_freq'].append(tdt_file.scalars[f'Fi{fiber}i'].data[1, 0])
-
-        # Grab sampling frequency for each fiber from tdt.
-        metadata['sampling_freq'].append(tdt_file.streams[f'Fi{fiber}r'].fs)
-
-        metadata['fiber_sig'].append(tdt_file.streams[f'Fi{fiber}r'].data[2])
-
-        metadata['carrier_sig'].append(tdt_file.streams[f'Fi{fiber}r'].data[2])
-
-    return metadata #pd.DataFrame(data=metadata).set_index('fiber_references')
+    return (labels[active_channels], raw_photoms[active_channels],
+            raw_carriers[active_channels], input_carriers[active_channels])
 
 
-# def offline_demodulation(data,
-#                          metadata,
-#                          tau: int = 20,
-#                          z: bool = True,
-#                          z_window: int = 60,
-#                          downsample_fs: int = 600,
-#                          bandpass_bw: int = 50,
-#                          **kwargs):
+def calc_carrier_freq(raw_carrier_freqs: list[int | float],
+                      sampling_Hz: int | float):
 
-#     # Use a short snippet of the signal to fit our offline reference.
-#     use_points = int(1e4)
+    '''
+    Source: from DataJoint Pipeline
+    '''
 
-#     # Create dataframe containing sync pulses at downsampled frequency.
-#     demod_df = initialize_demod_df(data, metadata, downsample_fs)
-
-#     ref = {}
-#     for fiber in [col for col in data.columns if col.startswith('fiber')]:
-
-#         sig = data[fiber].values  # photometry signal
-#         ref_fs = metadata.loc[fiber, 'carrier_freq']
-#         fs = metadata.loc[fiber, 'sampling_freq']
-#         win_samples = int(z_window*fs)  # num samples for window given in seconds
-
-#         # Z-score data using rolling window before demodulation to detrend.
-#         if z:
-#             sig = rolling_zscore(sig, window_length=win_samples)
-#             print('applying first z-score with a 60s rolling window')
-
-#         # Convert sample points to timepoints based on sampling frequency.
-#         tstamps = np.arange(len(sig)) / fs
-
-#         # Use snippet to estimate reference sine wave parameters, making sure
-#         # to bypass z-score window tails. Compare to input reference frequency.
-#         ref["params_x"], _, _ = fit_reference(sig[win_samples:win_samples+use_points],
-#                                               tstamps[win_samples:win_samples+use_points],
-#                                               expected_fs=ref_fs)
-
-#         # Remember y (cosine) has a 90 degree phase shift.
-#         ref["params_y"] = (ref["params_x"][0],
-#                            ref["params_x"][1],
-#                            ref["params_x"][2] + np.pi / 2,
-#                            ref["params_x"][3])
-
-#         # Generate new reference sine and cosine waves using empirically fit params.
-#         ref["ref_x"] = gen_sine(ref["params_x"], tstamps)
-#         ref["ref_y"] = gen_sine(ref["params_y"], tstamps)
-
-#         # Demodulate signal using fit sine/cosine waves for reference signal.
-#         # Bandpass signal then (conservatively) lowpass filter after downsampling.
-#         _, _, demod_sig, _ = demodulate(sig,
-#                                     ref_fs,
-#                                     ref_x=ref["ref_x"],
-#                                     ref_y=ref["ref_y"],
-#                                     demod_tau=tau,
-#                                     downsample_fs=downsample_fs,
-#                                     bandpass_bw=bandpass_bw)
-
-#         # Ensure NaNs replace any demodulation/z-score beyond rolling window extremities.
-#         demod_sig[:int(z_window*downsample_fs)] = np.nan
-#         demod_sig[-int(z_window*downsample_fs):] = np.nan
-#         demod_data_col = fiber.replace('fiber', 'detrend')
-#         demod_df[demod_data_col] = demod_sig
-
-#     # Trim dataframe to first and last timepoints containing demodulated signal.
-#     start_idx = demod_df[demod_data_col].first_valid_index()
-#     end_idx = demod_df[demod_data_col].last_valid_index()
-#     demod_df = demod_df[start_idx:end_idx].reset_index(drop=True)
-
-#     if z:
-#         # Always include "raw" demodulated signal, even if z-scoring.
-#         raw = offline_demodulation(data, metadata, tau, z=False,
-#                                    downsample_fs=downsample_fs,
-#                                    bandpass_bw=bandpass_bw, **kwargs)
-
-#         # Ensure equivalence/redundancy between sync columns before
-#         assert demod_df[['toBehSys', 'fromBehSys']].equals(raw[['toBehSys', 'fromBehSys']])
-
-#         for fiber in [col for col in data.columns if col.startswith('fiber')]:
-#             side = fiber[len('fiber_'):]
-#             demod_df[fiber.replace('fiber', 'raw')] = raw[f'detrend_{side}']
-
-#     return demod_df
+    calc_carrier_freqs = []
+    n_points = 2**14
+    for raw_carrier in raw_carrier_freqs:
+        start_idx = len(raw_carrier) // 4
+        fft_carrier = abs(np.fft.fft(raw_carrier[start_idx:start_idx+n_points]))
+        P2 = fft_carrier / n_points
+        P1 = abs(P2/2+1)
+        P1[1:-1] = 2*P1[1:-1]
+        f = sampling_Hz * np.arange(n_points // 2) / n_points
+        idx = np.argmax(P1, axis=None)
+        calc_carrier = round(f[idx])
+        calc_carrier_freqs.append(calc_carrier)
+    return calc_carrier_freqs
