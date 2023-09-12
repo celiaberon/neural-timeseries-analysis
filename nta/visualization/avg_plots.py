@@ -263,7 +263,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                             err_kws={'alpha': 0.3},
                             estimator=kwargs.get('estimator', 'mean'))
 
-    ax1 = config_plot(ax1, y_col, column, **kwargs)
+    ax1 = config_plot(ax1, y_col, column, ts[y_col], **kwargs)
 
     # Plot distribution of behavioral/task events relative to alignment event.
     if behavior_hist:
@@ -333,8 +333,9 @@ def plotting_wrapper(trials: pd.DataFrame,
 def config_plot(ax,
                 y_col: str,
                 column: str,
+                ts_channel: pd.Series,
                 legend_set: bool = False,
-                ylim: tuple = (-2, 3),
+                ylim: tuple = None, #(-2, 3),
                 ls_col=False,
                 window: tuple = (1, 3),
                 **kwargs):
@@ -345,6 +346,10 @@ def config_plot(ax,
     '''
 
     align_event = y_col.split('_')[0]
+    if ylim is None:
+        ymin = np.mean(ts_channel) - 3 * np.std(ts_channel)
+        ymax = np.mean(ts_channel) + 3 * np.std(ts_channel)
+        ylim = (ymin, ymax)
     ax.axvline(x=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0,
                label=None)
     ax.axhline(y=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0)
