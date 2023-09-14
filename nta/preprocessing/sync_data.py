@@ -29,7 +29,7 @@ def set_analog_headers(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
 
     ts_ = beh_timeseries.copy()
     # State columns will have mode 53 (consumption period)
-    column_modes = ts_.mode().iloc[0] == 53.
+    column_modes = ts_.mode().iloc[0].isin([30, 53])
     state_columns = ts_.columns[column_modes].tolist()
 
     # Match state columns position to the appropriate column header ordering.
@@ -64,7 +64,10 @@ def trim_to_session_start(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
         first_trial_idx = beh_timeseries.query('iOccurrence == 0').index[0]
         trimmed_data = beh_timeseries.loc[first_trial_idx:].copy()
 
-    return trimmed_data.reset_index(drop=True)
+        return trimmed_data.reset_index(drop=True)
+
+    else:
+        return beh_timeseries.reset_index(drop=True)
 
 
 def handshake_sync_pulses(photo_timeseries: pd.DataFrame
@@ -97,11 +100,29 @@ def handshake_sync_pulses(photo_timeseries: pd.DataFrame
     return ts_
 
 
-def trim_at_enl_pulses(photo_timeseries, nth_pulse=1):
+def trim_at_sync_pulses(timeseries: pd.DataFrame,
+                        nth_pulse: int = 1,
+                        sync_col: str = 'fromBehSys') -> pd.DataFrame:
 
-    ts_ = photo_timeseries.copy()
+    '''
+    Crop timeseries between first (or nth) and last (or -nth) sync pulses.
 
-    pulse_onsets = ts_.query('fromBehSys == 0').index.values
+    Args:
+        timeseries:
+            Timeseries containing sync pulses.
+        nth_pulses:
+            Nth sync pulse at which to crop dataframe (beginning and end).
+        sync_col:
+            Column name containing binary sync pulses.
+
+    Returns:
+        ts_:
+            Cropped timeseries dataframe.
+    '''
+
+    ts_ = timeseries.copy()
+
+    pulse_onsets = ts_.query(f'{sync_col} == 0').index.values
     ts_ = ts_.loc[pulse_onsets[nth_pulse-1]: pulse_onsets[-nth_pulse]]
     ts_ = ts_.reset_index(drop=True)
 
@@ -334,13 +355,23 @@ def resample_and_align(beh_timeseries: pd.DataFrame,
     return aligned_df
 
 
-def set_to_same_clock(ts1, ts2):
+def set_to_same_clock(ts1: pd.DataFrame, ts2: pd.DataFrame) -> pd.DataFrame:
 
     '''
-    ts1:
-        Timeseries of data collection started first.
-    ts2:
-        Timeseries of data collection started second (used as official sync clock).
+    Reset session clock times after alignment of dataframes to run on
+    synchronized clocks. Necessary for mapping between dataframes by time.
+
+    Args:
+        ts1:
+            Timeseries of data collection started first.
+        ts2:
+            Timeseries of data collection started second (used as official
+            sync clock).
+
+    Returns:
+        ts1_:
+            Copy of ts1 with `session_clock` column synchronized to that of
+            ts2.
     '''
 
     ts1_, ts2_ = ts1.copy(), ts2.copy()
@@ -348,9 +379,6 @@ def set_to_same_clock(ts1, ts2):
     real_clock_start = ts2_.session_clock.iloc[0]
     adjustment_time = aligned_start_time - real_clock_start
     ts1_['session_clock'] -= round(adjustment_time, 3)
-
-    # Time in seconds needed to shift for alignment (sanity check).
-    print(f'shift into behavior by {adjustment_time} seconds')
 
     return ts1_
 
@@ -360,8 +388,10 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
                       **kwargs) -> pd.DataFrame:
 
     '''
-    Downsamples photometry data to match behavior data sampling rate and
-    aligns photometry channel timeseries with behavior data timeseries.
+    Crops photometry and/or behvior dataframes to start and end at the same
+    instantaneous events. Uses correlation in sync pulses between dataframes
+    to match alignments. Dataframes can be provided with different sampling
+    rates.
 
     Args:
         beh_timeseries:
@@ -371,8 +401,9 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
             sampling freq during demodulation).
 
     Returns:
-        aligned_df:
-            Timeseries of behavior and photometry data aligned at 200Hz.
+        beh_ts_trimmed, photo_ts_trimmed:
+            Timeseries of behavior and photometry data aligned to single clock
+            and starting timepoint.
     '''
 
     beh_ts_ = beh_timeseries.copy()
@@ -413,20 +444,52 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
     return beh_ts_trimmed, photo_ts_trimmed
 
 
-def find_nearest_time(all_times, x):
+def find_nearest_time(all_times: np.array, x: float) -> int:
+
+    '''
+    Returns time that minimizes differences between instantaneous timepoint
+    and a series of timepoints.
+
+    Args:
+        all_times:
+            Array of timestamps (for mapping into).
+        x:
+            Instantaneous timepoint (to be mapped):
+    Returns:
+            Index of nearest timepoint in `all_times` to `x`.
+    '''
 
     return np.argmin(np.abs(all_times - x))
 
 
-def map_events_by_time(target_ts, orig_ts, event_col):
+def map_events_by_time(target_ts: pd.DataFrame,
+                       orig_ts: pd.DataFrame,
+                       event_col: str) -> pd.DataFrame:
 
+    '''
+    Map events by timestamp into index of new dataframe with nearest
+    timestamp.
+
+    Args:
+        target_ts:
+            Timeseries events are being mapped into.
+        orig_ts:
+            Timeseries containing events to be mapped.
+        event_col:
+            Name of column containing events to be mapped.
+
+    Returns:
+        target_ts_:
+            Copy of target_ts with new column for mapped events.
+    '''
+
+    # Define set of instantaneous events.
     onset_only_LUT = {'iSpout': True,
                       'Select': True,
                       'ENLP': True,
                       'CueP': True,
                       'outcome_licks': True,
                       'fromBehSys': True}
-
     onset_only = onset_only_LUT.get(event_col, False)
 
     target_ts_ = target_ts.copy()
@@ -435,6 +498,8 @@ def map_events_by_time(target_ts, orig_ts, event_col):
         events = orig_ts.query(f'{event_col}.diff() > 0')
     else:
         events = orig_ts.query(f'{event_col}.diff().ne(0)')
+
+    # Get arrays indices at nearest timepoint to event time in new array.
     event_times = events.session_clock.values
     event_idcs = list(map(functools.partial(find_nearest_time, target_ts_.session_clock), event_times))
     event_ids = events[event_col].values
