@@ -6,7 +6,7 @@ Created on Tue May 19 20:53:07 2020
 @author: celiaberon
 """
 
-import functools
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -38,7 +38,7 @@ def set_analog_headers(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
             ts_.columns = ['nTrial', 'iBlock', 'iTrial', 'iOccurrence',
                            'iState_start', 'iState_end', 'analog1', 'analog2']
         case [3, 4]:
-            ts_.columns = ['iBlock', 'iTrial', 'iOccurrence', 'iState_start'
+            ts_.columns = ['iBlock', 'iTrial', 'iOccurrence', 'iState_start',
                            'iState_end', 'analog1', 'analog2', 'nTrial']
         case _:
             raise ValueError
@@ -223,7 +223,8 @@ def bins_per_trial_photo(photo_timeseries) -> tuple:
     return trial_lengths, trial_starts
 
 
-def sliding_corr(list1: list, list2: list, offset_range: int = 30) -> tuple:
+def sliding_corr(list1: list, list2: list, offset_range: int = 30,
+                 max_corr_thresh: float = 0.9999) -> tuple:
 
     '''
     Slide lists across each other over offset range and get correlation for
@@ -270,7 +271,7 @@ def sliding_corr(list1: list, list2: list, offset_range: int = 30) -> tuple:
 
     print(max_corr_trimmed_lists)
     # Fails if maximum correlation isn't essentially perfect.
-    assert max_corr_trimmed_lists > 0.999
+    assert max_corr_trimmed_lists > max_corr_thresh
 
     return corr_lst, offset
 
@@ -501,7 +502,9 @@ def map_events_by_time(target_ts: pd.DataFrame,
 
     # Get arrays indices at nearest timepoint to event time in new array.
     event_times = events.session_clock.values
-    event_idcs = list(map(functools.partial(find_nearest_time, target_ts_.session_clock), event_times))
+    find_nearest_time_ = partial(find_nearest_time, target_ts_.session_clock)
+    event_idcs = list(map(find_nearest_time_, event_times))
+    event_idcs = target_ts_.iloc[event_idcs].index.values
     event_ids = events[event_col].values
 
     # For impulse events where on/off indices are the same.
