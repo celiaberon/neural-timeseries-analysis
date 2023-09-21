@@ -11,6 +11,7 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import scipy.signal as signal
+from scipy import stats as st
 
 
 def set_analog_headers(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
@@ -28,10 +29,14 @@ def set_analog_headers(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
     '''
 
     ts_ = beh_timeseries.copy()
-    # State columns will have mode 53 (consumption period)
-    column_modes = ts_.mode().iloc[0].isin([30, 53])
-    state_columns = ts_.columns[column_modes].tolist()
+    # State columns will have mode 53 (consumption period) or 30 (ENL).
 
+    mode_values, mode_counts = st.mode(ts_, keepdims=False)
+    cols_in_play = [(i, val, count) for i, (val, count)
+                    in enumerate(zip(mode_values, mode_counts))
+                    if val in [30, 53]]
+    cols_in_play.sort(key=lambda x: x[2], reverse=True)
+    state_columns = [i for i, _, _ in cols_in_play[:2]]
     # Match state columns position to the appropriate column header ordering.
     match state_columns:
         case [4, 5]:
@@ -250,8 +255,10 @@ def sliding_corr(list1: list, list2: list, offset_range: int = 30,
     '''
 
     shorter_list = min(len(list1), len(list2)) - 1
+    if shorter_list <= offset_range:
+        offset_range = shorter_list - 5
     corr_lst = []
-
+    print(list1, list2)
     for i in range(-offset_range, offset_range):
         if i < 0:
             corr = np.corrcoef(list1[np.abs(i):shorter_list],
@@ -260,7 +267,6 @@ def sliding_corr(list1: list, list2: list, offset_range: int = 30,
             corr = np.corrcoef(list1[:shorter_list-i],
                                list2[i:shorter_list])
         corr_lst.append(corr[1, 0])
-
     # Offset that maximizes correlation within offset range.
     offset = range(-offset_range, offset_range)[np.argmax(corr_lst)]
 
@@ -416,9 +422,15 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
 
     # Find offset between photometry and behavior (number of trials between
     # data collection onsets). NOTE: order matters for later trimming.
-    corr_lst, offset = sliding_corr(list1=photo_trial_lengths,
-                                    list2=behavior_trial_lengths,
-                                    **kwargs)
+    # try:
+    _, offset = sliding_corr(list1=photo_trial_lengths,
+                             list2=behavior_trial_lengths,
+                              **kwargs)
+    # except AssertionError:
+    #     # Maybe instead photometry was started first.
+    #     _, offset = sliding_corr(list1=behavior_trial_lengths,
+    #                              list2=photo_trial_lengths,
+    #                              **kwargs)
 
     # Maximum number of trials that can be aligned.
     shorter_list = min(len(photo_trial_idx), len(beh_trial_idx)) - 1
@@ -442,7 +454,7 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
     # Match clocks start time once dataframes are aligned.
     beh_ts_trimmed = set_to_same_clock(beh_ts_trimmed, photo_ts_trimmed)
 
-    return beh_ts_trimmed, photo_ts_trimmed
+    return beh_ts_trimmed, photo_ts_trimmed, photo_trial_lengths, behavior_trial_lengths
 
 
 def find_nearest_time(all_times: np.array, x: float) -> int:
