@@ -8,6 +8,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import scipy
 
 from nta.preprocessing.signal_processing import snr_photo_signal
 
@@ -36,26 +37,29 @@ def QC_included_trials(analog_single: pd.DataFrame,
             Contain only identical trials.
     '''
 
-    flagged_trials = bdf_single.loc[bdf_single.flagBlocks].nTrial.values
+    flagged_trials = bdf_single.query('flag_block == 1').nTrial.values
 
     if allow_discontinuity:
         # flagged_trials stays as is
         if drop_enlP:  # take only trials without enl penalty
             ntrials = len(bdf_single)
             bdf_single = bdf_single.loc[bdf_single.n_ENL == 1]
-            print(ntrials-len(bdf_single), 'penalty trials dropped')
+            print(ntrials - len(bdf_single), 'penalty trials dropped')
 
         if drop_timeouts:  # take only trials with choice lick
             ntrials = len(bdf_single)
             bdf_single = bdf_single.loc[~bdf_single.timeout]
-            print(ntrials-len(bdf_single), 'timeout trials dropped')
+            print(ntrials - len(bdf_single), 'timeout trials dropped')
 
     else:
         # flag only blocks that don't disrupt photometry timeseries
-        min_trial_good_block = bdf_single.query('~flagBlocks').nTrial.min()
-        max_trial_good_block = bdf_single.query('~flagBlocks').nTrial.max()
-        flagged_trials[(flagged_trials < min_trial_good_block)
-                       | (flagged_trials > max_trial_good_block)]
+        min_trial = bdf_single.query('~flag_block').nTrial.min()
+        max_trial = bdf_single.query('~flag_block').nTrial.max()
+        flagged_trials = {flagged_trials,
+                          (bdf_single
+                           .query('~nTrial.between(@min_trial, @max_trial)')
+                           .nTrial.values),
+                          }.tolist()
 
     bdf_single = bdf_single.loc[~bdf_single.nTrial.isin(flagged_trials)]
 
@@ -96,10 +100,10 @@ def QC_enl_penalty_rate(trials: pd.DataFrame) -> list:
                  .penalty.mean())
 
     for mouse, mouse_penalties in penalties.groupby('Mouse'):
-        late_sessions_dates = np.sort(mouse_penalties.Date.unique())[-6:]
-        late_sessions = mouse_penalties.query('Date.isin(@late_sessions_dates)')['penalty']
-        late_sessions_mean = np.nanmean(late_sessions)
-        late_sessions_std = np.nanstd(late_sessions)
+        late_dates = np.sort(mouse_penalties.Date.unique())[-6:]
+        late_sessions = mouse_penalties.query('Date.isin(@late_dates)')
+        late_sessions_mean = np.nanmean(late_sessions['penalty'])
+        late_sessions_std = np.nanstd(late_sessions['penalty'])
         qc_criteria = late_sessions_mean + (2 * late_sessions_std)
         penalties.loc[penalties.Mouse == mouse, 'QC_criteria'] = qc_criteria
 
@@ -122,7 +126,6 @@ def get_sess_val(trials, trial_variable):
 def QC_session_performance(trials: pd.DataFrame,
                            analog: pd.DataFrame,
                            update_log: bool = False,
-                           filename_suffix: str = 'photometry',
                            **kwargs) -> bool:
 
     '''
@@ -176,7 +179,7 @@ def QC_session_performance(trials: pd.DataFrame,
         criteria_met = False
 
     right_avg = trials.direction.mean()
-    if np.abs(right_avg-0.5) > SIDE_BIAS:
+    if np.abs(right_avg - 0.5) > SIDE_BIAS:
         criteria_met = False
 
     spout_avg = (analog.query('iSpout.ne(0)')
@@ -188,22 +191,20 @@ def QC_session_performance(trials: pd.DataFrame,
 
     if update_log:
         enlp_rate = np.mean(trials['n_ENL'] > 1)
-        sess_summary = pd.DataFrame(
-                                    {'Mouse': get_sess_val(trials, 'Mouse'),
-                                     'Date': get_sess_val(trials, 'Date'),
-                                     'Session': get_sess_val(trials, 'Session'),
-                                    #  'Condition': trials.Condition.unique()[0],
-                                     'P(right)': round(right_avg, 2),
-                                     'P(high)': round(target_avg, 2),
-                                     'P(spout)': round(spout_avg, 2),
-                                     'N_valid_trials': n_valid_trials,
-                                     'enl_penalty_rate': round(enlp_rate, 2),
-                                     'Pass': criteria_met},
-                                    index=[0])
+        qc_summary = pd.DataFrame({'Mouse': get_sess_val(trials, 'Mouse'),
+                                   'Date': get_sess_val(trials, 'Date'),
+                                   'Session': get_sess_val(trials, 'Session'),
+                                   'P(right)': round(right_avg, 2),
+                                   'P(high)': round(target_avg, 2),
+                                   'P(spout)': round(spout_avg, 2),
+                                   'N_valid_trials': n_valid_trials,
+                                   'enl_penalty_rate': round(enlp_rate, 2),
+                                   'Pass': criteria_met},
+                                  index=[0])
 
-        # save_session_log(sess_summary, filename_suffix)
+        save_session_log(qc_summary, **kwargs)
 
-    return criteria_met, sess_summary
+    return criteria_met
 
 
 def load_session_log(path_to_file: str):
@@ -223,24 +224,21 @@ def load_session_log(path_to_file: str):
     '''
 
     try:
-        session_log = pd.read_csv(path_to_file, index_col=0)
-        previous_sessions = session_log.Session.values
+        return pd.read_csv(path_to_file, index_col=None)
     except FileNotFoundError:
-        session_log = pd.DataFrame()
-        previous_sessions = []
-
-    return session_log, previous_sessions
+        return pd.DataFrame()
 
 
-def save_session_log(session_qc_summary: pd.DataFrame,
-                     filename_suffix: str = 'photometry',
-                     root: str = ''):
+def save_session_log(sess_qc: pd.DataFrame,
+                     fname_suffix: str = 'photometry',
+                     root: str = '',
+                     **kwargs):
 
     '''
     Save summary of session quality control metrics.
 
     Args:
-        session_qc_summary:
+        sess_qc:
             DataFrame containing quality control metrics for single session.
         filename_suffix:
             Suffix for session_log filename.
@@ -251,19 +249,21 @@ def save_session_log(session_qc_summary: pd.DataFrame,
 
     if not root:
         root = input('Please provide a path for logging:')
-    filename = f'session_log_qc_{filename_suffix}.csv'
+    filename = f'session_log_{fname_suffix}.csv'
     path_to_file = os.path.join(root, filename)
+    session_log = load_session_log(path_to_file)
 
-    session_log, previous_sessions = load_session_log(path_to_file)
-    updated_log = pd.merge(session_log, session_qc_summary,
-                           on=['Mouse', 'Date'], how='left')
-    updated_log.to_csv(path_to_file)
-    # if session_qc_summary.Session.squeeze() not in previous_sessions:
-    #     session_log = pd.concat((session_log, session_qc_summary),
-    #                             ignore_index=True)
-    #     session_log.to_csv(path_to_file)
-    # else:
-    #     print('duplicate found, skipping logging')
+    if 'N_valid_trials' not in session_log.columns:
+        updated_log = pd.merge(session_log, sess_qc,
+                               on=['Mouse', 'Date'], how='left')
+    else:
+        updated_log = session_log.copy()
+        for col in sess_qc.columns.drop(['Mouse', 'Date']):
+            mouse, date, val = sess_qc[['Mouse', 'Date', col]].iloc[0].values
+            idx = updated_log.query('Mouse == @mouse & Date == @date').index
+            updated_log.loc[idx, col] = val
+
+    updated_log.to_csv(path_to_file, index=False)
 
 
 def QC_photometry_signal(timeseries: pd.DataFrame,
@@ -309,4 +309,45 @@ def QC_photometry_signal(timeseries: pd.DataFrame,
     if len(y_cols) == 2:
         ts_['z_grnDelta'] = ts_['z_grnR'] - ts_['z_grnL']
 
-    return ts_
+    y_cols_pass = {'z_grnR', 'z_grnL'} - set(y_cols)
+    return ts_, y_cols_pass
+
+
+def is_normal(ts, include_score=False):
+
+    '''
+    Test for normality as a measure of signal to noise. Result of normally
+    distributed data fails to pass QC protocol. Normality is determined via
+    collective evaluation of skew, kurtosis, and K-S test p-value.
+
+    Args:
+        ts:
+            Timeseries to be evaluated.
+        include_score:
+            Whether or not to include the number of metrics that passed as
+            normally distributed.
+
+    Returns:
+        result:
+            True if any metric is consistent with normal distribution. False if
+            all metrics deviate from normal distribution.
+        score:
+            Number of metrics that are consistent with normal distribution (0
+            to 3).
+    '''
+
+    skew = np.abs(ts.skew()) < 1
+    kurtosis = np.abs(ts.kurtosis()) < 1
+
+    rand_normal = np.random.normal(0, np.nanstd(ts), len(ts))
+    _, p_value = scipy.stats.ks_2samp(ts, rand_normal, alternative="two-sided")
+
+    ks_test = p_value > 0.05
+
+    result = any((skew, kurtosis, ks_test))
+
+    if include_score:
+        score = sum((skew, kurtosis, ks_test))
+        return result, score
+    else:
+        return result

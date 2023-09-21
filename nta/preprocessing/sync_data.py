@@ -37,6 +37,7 @@ def set_analog_headers(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
                     if val in [30, 53]]
     cols_in_play.sort(key=lambda x: x[2], reverse=True)
     state_columns = [i for i, _, _ in cols_in_play[:2]]
+    state_columns.sort()
     # Match state columns position to the appropriate column header ordering.
     match state_columns:
         case [4, 5]:
@@ -75,8 +76,7 @@ def trim_to_session_start(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
         return beh_timeseries.reset_index(drop=True)
 
 
-def handshake_sync_pulses(photo_timeseries: pd.DataFrame
-                                  ) -> pd.DataFrame:
+def handshake_sync_pulses(photo_timeseries: pd.DataFrame) -> pd.DataFrame:
 
     '''
     Find first incoming and outgoing pulses to and from photometry system and
@@ -128,7 +128,7 @@ def trim_at_sync_pulses(timeseries: pd.DataFrame,
     ts_ = timeseries.copy()
 
     pulse_onsets = ts_.query(f'{sync_col} == 0').index.values
-    ts_ = ts_.loc[pulse_onsets[nth_pulse-1]: pulse_onsets[-nth_pulse]]
+    ts_ = ts_.loc[pulse_onsets[nth_pulse - 1]: pulse_onsets[-nth_pulse]]
     ts_ = ts_.reset_index(drop=True)
 
     return ts_
@@ -219,8 +219,9 @@ def bins_per_trial_photo(photo_timeseries) -> tuple:
 
     # Trial starts defined as drop from 1->0 in pulse from behavior system.
     trial_starts = ts_.loc[ts_.fromBehSys.diff() == -1].index.tolist()
-    trial_starts = np.insert(trial_starts, 0, 0)  # because trimmed to a pulse
-    trial_starts = np.insert(trial_starts, -1, ts_.index[-1])  # because trimmed to a pulse
+    # Insert pulses at beginning and end of df because trimmed to pulses.
+    trial_starts = np.insert(trial_starts, 0, 0)
+    trial_starts = np.insert(trial_starts, -1, ts_.index[-1])
 
     # Calculate length of trials from intervals between pulses.
     trial_lengths = calculate_trial_length(ts_, trial_starts)
@@ -228,7 +229,7 @@ def bins_per_trial_photo(photo_timeseries) -> tuple:
     return trial_lengths, trial_starts
 
 
-def sliding_corr(list1: list, list2: list, offset_range: int = 30,
+def sliding_corr(list1: list, list2: list, lag_range: int = 30,
                  max_corr_thresh: float = 0.9999) -> tuple:
 
     '''
@@ -238,7 +239,7 @@ def sliding_corr(list1: list, list2: list, offset_range: int = 30,
     Args:
         list1, list2:
             Lists to maximize correlation between.
-        offset_range:
+        lag_range:
             Halfwidth of offset positions over which to calculate correlation
             between lists.
 
@@ -246,7 +247,7 @@ def sliding_corr(list1: list, list2: list, offset_range: int = 30,
         corr_lst:
             Full list of correlation coefficients between offsets within
             range(-offset_range, offset_range).
-        offset:
+        lag:
             Offset position that maximizes correlation between list1, list2.
 
     Note:
@@ -255,31 +256,33 @@ def sliding_corr(list1: list, list2: list, offset_range: int = 30,
     '''
 
     shorter_list = min(len(list1), len(list2)) - 1
-    if shorter_list <= offset_range:
-        offset_range = shorter_list - 5
+
+    # To avoid indexing errors if lag range would shift past list boundary.
+    if shorter_list <= lag_range:
+        lag_range = shorter_list - 5
+
     corr_lst = []
-    print(list1, list2)
-    for i in range(-offset_range, offset_range):
+    for i in range(-lag_range, lag_range):
         if i < 0:
             corr = np.corrcoef(list1[np.abs(i):shorter_list],
-                               list2[:shorter_list-np.abs(i)])
+                               list2[:shorter_list - np.abs(i)])
         if i >= 0:
-            corr = np.corrcoef(list1[:shorter_list-i],
+            corr = np.corrcoef(list1[:shorter_list - i],
                                list2[i:shorter_list])
         corr_lst.append(corr[1, 0])
-    # Offset that maximizes correlation within offset range.
-    offset = range(-offset_range, offset_range)[np.argmax(corr_lst)]
+    # Lag that maximizes correlation within lag range.
+    lag = range(-lag_range, lag_range)[np.argmax(corr_lst)]
 
     # Trim each list based on max corr position and recalculate max corr.
-    trimmed_list1 = list1[np.max((0, -offset)): shorter_list-np.max((0, offset))]
-    trimmed_list2 = list2[np.max((0, offset)): shorter_list-np.max((0, -offset))]
+    trimmed_list1 = list1[np.max((0, -lag)): shorter_list - np.max((0, lag))]
+    trimmed_list2 = list2[np.max((0, lag)): shorter_list - np.max((0, -lag))]
     max_corr_trimmed_lists = np.corrcoef(trimmed_list1, trimmed_list2)[1, 0]
 
     print(max_corr_trimmed_lists)
     # Fails if maximum correlation isn't essentially perfect.
     assert max_corr_trimmed_lists > max_corr_thresh
 
-    return corr_lst, offset
+    return corr_lst, lag
 
 
 def resample_and_align(beh_timeseries: pd.DataFrame,
@@ -337,12 +340,14 @@ def resample_and_align(beh_timeseries: pd.DataFrame,
 
         first_beh_idx = beh_trial_idx[np.max((0, offset))]
         last_beh_idx = beh_trial_idx[shorter_list - np.max((0, -offset))]
-        beh_ts_trimmed = beh_ts_.loc[first_beh_idx:last_beh_idx].reset_index(drop=True)
+        beh_ts_trimmed = (beh_ts_
+                          .loc[first_beh_idx:last_beh_idx]
+                          .reset_index(drop=True))
 
         # Ensure that length of photometry timeseries is essentially integer
         # multiple of behavior timeseries.
-        print('downsampling by ', len(photo_ts_trimmed)/len(beh_ts_trimmed))
-        assert np.abs(3 - len(photo_ts_trimmed)/len(beh_ts_trimmed)) < 0.00001
+        print('downsampling by ', len(photo_ts_trimmed) / len(beh_ts_trimmed))
+        assert np.abs(3 - len(photo_ts_trimmed) / len(beh_ts_trimmed)) < 1e-5
 
         # Downsample photometry data to match sampling rate of behavior data.
         ds_photometry = signal.resample(photo_ts_trimmed[channels],
@@ -425,12 +430,7 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
     # try:
     _, offset = sliding_corr(list1=photo_trial_lengths,
                              list2=behavior_trial_lengths,
-                              **kwargs)
-    # except AssertionError:
-    #     # Maybe instead photometry was started first.
-    #     _, offset = sliding_corr(list1=behavior_trial_lengths,
-    #                              list2=photo_trial_lengths,
-    #                              **kwargs)
+                             **kwargs)
 
     # Maximum number of trials that can be aligned.
     shorter_list = min(len(photo_trial_idx), len(beh_trial_idx)) - 1
@@ -443,7 +443,9 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
 
     first_beh_idx = beh_trial_idx[np.max((0, offset))]
     last_beh_idx = beh_trial_idx[shorter_list - np.max((0, -offset))]
-    beh_ts_trimmed = beh_ts_.loc[first_beh_idx:last_beh_idx].reset_index(drop=True)
+    beh_ts_trimmed = (beh_ts_
+                      .loc[first_beh_idx:last_beh_idx]
+                      .reset_index(drop=True))
 
     # Time in seconds needed to shift for alignment (sanity check).
     aligned_start_time = beh_ts_trimmed.session_clock.iloc[0]
@@ -454,7 +456,7 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
     # Match clocks start time once dataframes are aligned.
     beh_ts_trimmed = set_to_same_clock(beh_ts_trimmed, photo_ts_trimmed)
 
-    return beh_ts_trimmed, photo_ts_trimmed, photo_trial_lengths, behavior_trial_lengths
+    return beh_ts_trimmed, photo_ts_trimmed
 
 
 def find_nearest_time(all_times: np.array, x: float) -> int:
