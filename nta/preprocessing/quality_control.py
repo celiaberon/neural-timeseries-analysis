@@ -13,8 +13,8 @@ import scipy
 from nta.preprocessing.signal_processing import snr_photo_signal
 
 
-def QC_included_trials(analog_single: pd.DataFrame,
-                       bdf_single: pd.DataFrame,
+def QC_included_trials(ts: pd.DataFrame,
+                       trials: pd.DataFrame,
                        allow_discontinuity: bool = False,
                        drop_enlP: bool = False,
                        drop_timeouts: bool = False) -> dict:
@@ -24,56 +24,65 @@ def QC_included_trials(analog_single: pd.DataFrame,
     -- remove high timeout blocks
 
     Args:
-        analog (pandas DF):
-            Timeseries containing states and photometry data.
-        mouse (str):
-            Mouse ID.
-        session_date (str):
-            Session ID.
+        ts:
+            Timeseries containing states and neural data for a single
+            session.
+        trials:
+            Trial data for single session.
+        allow_discontinuity:
+            Whether or not continuous trial structure can be broken. If false,
+            only trials from beginning/end can be excluded.
+        drop_enlP:
+            Whether or not to exclude trials with ENL penalties.
+        drop_timeouts:
+            Whether or not to exclude trials with selection timeouts.
 
     Returns:
         trials_matched (dict):
-            {'bdf': trial data, 'analog': timeseries data}
-            Contain only identical trials.
+            {'trials': trial data, 'ts': timeseries data}
+            Contain only identical trial sets.
     '''
+    assert ts.session.dropna().nunique() == 1, 'multi-session not implemented'
+    assert trials.Session.dropna().nunique() == 1, 'multi-session not imp'
 
-    flagged_trials = bdf_single.query('flag_block == 1').nTrial.values
+    trials_ = trials.copy()
+    ts_ = ts.copy()
+
+    flagged_trials = trials_.query('flag_block == 1').nTrial.values
 
     if allow_discontinuity:
         # flagged_trials stays as is
         if drop_enlP:  # take only trials without enl penalty
-            ntrials = len(bdf_single)
-            bdf_single = bdf_single.loc[bdf_single.n_ENL == 1]
-            print(ntrials - len(bdf_single), 'penalty trials dropped')
+            ntrials = len(trials_)
+            trials_ = trials_.query('n_ENL == 1')
+            print(ntrials - len(trials_), 'penalty trials dropped')
 
         if drop_timeouts:  # take only trials with choice lick
-            ntrials = len(bdf_single)
-            bdf_single = bdf_single.loc[~bdf_single.timeout]
-            print(ntrials - len(bdf_single), 'timeout trials dropped')
+            ntrials = len(trials_)
+            trials_ = trials_.query('~timeout')
+            print(ntrials - len(trials_), 'timeout trials dropped')
 
     else:
         # flag only blocks that don't disrupt photometry timeseries
-        min_trial = bdf_single.query('~flag_block').nTrial.min()
-        max_trial = bdf_single.query('~flag_block').nTrial.max()
-        flagged_trials = {flagged_trials,
-                          (bdf_single
-                           .query('~nTrial.between(@min_trial, @max_trial)')
-                           .nTrial.values),
-                          }.tolist()
+        min_trial = trials_.query('~flag_block').nTrial.min()
+        max_trial = trials_.query('~flag_block').nTrial.max()
+        flagged_blocks = (trials_
+                          .query('~nTrial.between(@min_trial, @max_trial)')
+                          .nTrial.dropna().values)
+        ex_trials = list(set(flagged_trials).union(set(flagged_blocks)))
 
-    bdf_single = bdf_single.loc[~bdf_single.nTrial.isin(flagged_trials)]
+    trials_ = trials_.loc[~trials_.nTrial.isin(ex_trials)]
 
     # these blocks occur too infrequently -- less than 10 sessions
-    bdf_single = bdf_single.loc[bdf_single.iBlock <= 16]
+    trials_ = trials_.query('iBlock <= 16')
 
-    included_trials = (set(analog_single.nTrial.astype('int').unique())
-                       .intersection(bdf_single.nTrial.unique())
-                       )
+    included_trials = (set(ts_.nTrial.astype('int').values)
+                       .intersection(trials_.nTrial.values))
     # take only specified trials to match both dfs
-    analog_QC = analog_single.loc[analog_single.nTrial.isin(included_trials)]
-    bdf_QC = bdf_single.loc[bdf_single.nTrial.isin(included_trials)]
+    ts_QC = ts_.loc[ts_.nTrial.isin(included_trials)]
+    trials_QC = trials_.loc[trials_.nTrial.isin(included_trials)]
 
-    return {'bdf': bdf_QC, 'analog': analog_QC}
+    return {'trials': trials_QC, 'ts': ts_QC}
 
 
 def QC_enl_penalty_rate(trials: pd.DataFrame) -> list:
@@ -84,7 +93,7 @@ def QC_enl_penalty_rate(trials: pd.DataFrame) -> list:
 
     Args:
         trials (pandas.DataFrame):
-            Trial data
+            Trial data.
 
     Returns:
         qc_sessions (list):
@@ -124,7 +133,7 @@ def get_sess_val(trials, trial_variable):
 
 
 def QC_session_performance(trials: pd.DataFrame,
-                           analog: pd.DataFrame,
+                           ts: pd.DataFrame,
                            update_log: bool = False,
                            **kwargs) -> bool:
 
@@ -141,7 +150,7 @@ def QC_session_performance(trials: pd.DataFrame,
     Args:
         trials (pandas.DataFrame):
             Trial data.
-        analog (pandas.DataFrame):
+        ts (pandas.DataFrame):
             Timeseries data.
         update_log (bool):
             TRUE if saving .csv overview of session qc stats.
@@ -168,7 +177,7 @@ def QC_session_performance(trials: pd.DataFrame,
     # Evaluate spout bias on same trials as trial-level QC (i.e., not
     # including flagged blocks).
     trial_ids = trials.nTrial.unique()
-    analog = analog.copy().query('nTrial.isin(@trial_ids)')
+    ts_ = ts.copy().query('nTrial.isin(@trial_ids)')
 
     n_valid_trials = (trials
                       .query('flag_block==False & timeout==False')['nTrial']
@@ -182,7 +191,7 @@ def QC_session_performance(trials: pd.DataFrame,
     if np.abs(right_avg - 0.5) > SIDE_BIAS:
         criteria_met = False
 
-    spout_avg = (analog.query('iSpout.ne(0)')
+    spout_avg = (ts_.query('iSpout.ne(0)')
                  .iSpout.value_counts(normalize=True)[2.])
     if np.abs(spout_avg - 0.5) > SPOUT_BIAS:
         criteria_met = False

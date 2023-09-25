@@ -1,24 +1,25 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Tue Apr 26 20:17:37 2022
 
 @author: celiaberon
 """
 
-import pandas as pd
+from pathlib import Path
+
 import numpy as np
-import os
+import pandas as pd
 from tqdm import tqdm
+
 import nta.preprocessing.quality_control as qc
 from nta.features.behavior_features import add_behavior_cols
-# from nta.features.pp_design_mat import make_design_mat
+from nta.features.design_mat import make_design_mat
 
 
 def sessions_to_load(mouse: str,
-                     root: str,
-                     prob_set: int=9010,
-                     QC_pass: bool=True) -> list:
+                     *,
+                     root: str = '',
+                     probs: int = 9010,
+                     QC_pass: bool = True) -> list:
 
     '''
     Make list of sessions to include for designated mouse
@@ -27,47 +28,28 @@ def sessions_to_load(mouse: str,
         mouse (str):
             Mouse ID.
         root (str, path):
-            Path to reference sheet containing preprocessing info for each session.
+            Path to reference sheet containing preprocessing info for each
+            session.
         prob_set (int):
             Filter bandit data by probability conditions.
         QC_pass (bool):
-            Whether to take sessions passing quality control (True) or failing (False).
+            Whether to take sessions passing quality control (True) or failing
+            (False).
 
     Returns:
         dates_list (list):
             List of dates to load in for mouse.
     '''
 
-    if mouse in [f'C{i}' for i in range(30,37)]:
-        # old method without session log
-        from datetime import date, datetime
+    root = set_data_overview_path(root)
 
-        ref_df = pd.read_csv(f'{root}photometry_round1_pp.csv', index_col=None)
-        updated_version = date(2022, 6, 22)
-
-        status_col = f'states_{updated_version}'
-        ref_df = ref_df.loc[(ref_df.Mouse==mouse) 
-                            & (~pd.isnull(ref_df[status_col])) 
-                            & ~(ref_df[status_col].isin(['False', 'FALSE', False]))
-                            & (ref_df.Condition.isin([prob_set, str(prob_set)]))]
-
-        date_format = '%m/%d/%y'
-        dates_mask = [(datetime.strptime(row[status_col], date_format).date()-updated_version).days >= 0 for _, row in ref_df.iterrows()]
-        dates_list = ref_df[dates_mask].Date.values
-
-        return dates_list
-
-    if mouse in [f'C{i}' for i in range(44,48)]:
-        ref_df = pd.read_csv(f'{root}session_log_QC_photometry_dms.csv', index_col=0)
-    else:
-        ref_df = pd.read_csv(f'{root}session_log_QC_photometry.csv', index_col=0)
-
-    ref_df = ref_df.loc[(ref_df.Mouse==mouse)
-                        & (ref_df.Condition==prob_set)
-                        & (ref_df.Pass==QC_pass)
-                        & (ref_df.enlp_pass==QC_pass)
-                        ]
+    file_path = root / 'session_log_all_cohorts.csv'
+    ref_df = pd.read_csv(file_path)
+    probs = str(probs) if not isinstance(probs, str) else probs
+    ref_df = ref_df.query('Mouse == @mouse \
+                          & Condition == @probs & Pass == @QC_pass')
     dates_list = [session[4:] for session in ref_df.Session.values]
+    print(dates_list)
 
     return dates_list
 
@@ -88,21 +70,21 @@ def get_max_trial(full_sessions: dict) -> int:
     '''
 
     try:
-        max_trial_bdf = full_sessions['bdf'].nTrial.max()
-        max_trial_analog = full_sessions['analog'].nTrial.max()
-        assert max_trial_bdf == max_trial_analog
-        max_trial = max_trial_bdf
-    except KeyError:
+        max_trial_trials = full_sessions['trials'].nTrial.max()
+        max_trial_ts = full_sessions['ts'].nTrial.max()
+        assert max_trial_trials == max_trial_ts
+        max_trial = max_trial_trials
+    except AttributeError:
         max_trial = 0
 
     return max_trial
 
 
 def concat_sessions(*,
-                    sub_sessions: dict=None,
-                    full_sessions: dict=None,
+                    sub_sessions: dict = None,
+                    full_sessions: dict = None,
                     **kwargs):
-    
+
     '''
     Aggregate multiple sessions by renumbering trials to provide unique trial
     ID for each trial. Store original id in separate column.
@@ -128,7 +110,7 @@ def concat_sessions(*,
             ss_vals['nTrial_orig'] = ss_vals['nTrial'].copy()
 
         # Create session column to match across dataframes.
-        if 'session' not in sub_sessions.columns:
+        if 'session' not in ss_vals.columns:
             mouse = kwargs.get('mouse', None)
             session_date = kwargs.get('session_date', None)
             ss_vals['session'] = '_'.join([mouse, session_date])
@@ -138,14 +120,16 @@ def concat_sessions(*,
         tmp_copy['nTrial'] += max_trial
         full_sessions[key] = pd.concat((full_sessions[key], tmp_copy))
         full_sessions[key] = full_sessions[key].reset_index(drop=True)
-    
+
     # Use function to assert that new dataframes have matching max trial ID.
     _ = get_max_trial(full_sessions)
 
     return full_sessions
 
 
-def read_in_multi_mice(mice: list, **kwargs) -> dict:
+def read_multi_mice(mice: list[str],
+                    root: str = '',
+                    **kwargs) -> dict:
 
     '''
     Load in sessions by mouse and concatenate into one large dataframe keeping
@@ -160,80 +144,98 @@ def read_in_multi_mice(mice: list, **kwargs) -> dict:
         multi_mice (dict):
             {'bdf': trials data, 'analog': timeseries data}
     '''
+    if not root:
+        root = input('Please provide a path to the data:')
 
-    multi_mice = {key:pd.DataFrame() for key in ['bdf','analog']}
+    multi_mice = {key: pd.DataFrame() for key in ['trials', 'ts']}
 
     for mouse in mice:
 
-        multi_sessions = read_in_multi_sessions(mouse=mouse, **kwargs)
+        multi_sessions = read_multi_sessions(mouse=mouse, root=root, **kwargs)
 
-        if len(multi_sessions['bdf'])<1:
-            continue # skip mouse if no sessions returned
+        if len(multi_sessions['trials']) < 1:
+            continue  # skip mouse if no sessions returned
 
-        multi_mice = concat_sessions(subsessions=multi_sessions,
+        multi_mice = concat_sessions(sub_sessions=multi_sessions,
                                      full_sessions=multi_mice)
 
-    print(f'{multi_mice["bdf"].Session.nunique()} total sessions loaded in')
+    print(f'{multi_mice["trials"].Session.nunique()} total sessions loaded in')
     return multi_mice
 
 
-def read_in_multi_sessions(mouse: str,
-                           root: str,
-                           *,
-                           # pp_style: bool=False,
-                           prob_set: int=9010,
-                           fname_suffix: str='states_50Hz',
-                           QC_pass: bool=True,
-                           **dm_kwargs) -> dict:
+def read_multi_sessions(mouse: str,
+                        root: str = '',
+                        *,
+                        prob_set: int = 9010,
+                        # fname_suffix: str = 'states_50Hz',
+                        QC_pass: bool = True,
+                        **dm_kwargs) -> dict:
 
+    if not root:
+        root = input('Please provide a path to the data:')
+    root = Path(root)
     # define list of files to work through (by session and preprocessing date)
-    dates_list = sessions_to_load(mouse, prob_set, QC_pass=QC_pass, root=root)
-
-    multi_sessions = {key:pd.DataFrame() for key in ['bdf','analog']}
+    dates_list = sessions_to_load(mouse, probs=prob_set, QC_pass=QC_pass,
+                                  root=root)
+    multi_sessions = {key: pd.DataFrame() for key in ['trials', 'ts']}
 
     # Loop through files to be processed
     for session_date in tqdm(dates_list, mouse, disable=False):
 
-        file_path = os.path.join(root, mouse, session_date)
-        try:
-            filename = f'{mouse}_{session_date}_{fname_suffix}.parquet.gzip'
-            df_single = pd.read_parquet(os.path.join(file_path, filename))
+        file_path = set_session_path(root, mouse=mouse, session=session_date)
 
-            bdf = pd.read_csv(os.path.join(file_path, f'{mouse}_behavior_df_full.csv' ))
-            bdf = bdf.drop(columns=[col for col in bdf.columns if 'Unnamed' in col])
-
-            fs = int(fname_suffix.split('_')[1][:-2]) # assumes structure of 'states_XXHz_...'
-            bdf, df_single = add_behavior_cols(bdf, df_single, fs)
-
-            qc_eval = qc.QC_session_performance(bdf.query('flagBlocks==False'),
-                                                df_single,
-                                                filename_suffix='photometry')
-            if not qc_eval==QC_pass:
-                continue
-
-        except FileNotFoundError:
-            print(f'skipped {filename}')
+        ts_path = file_path / f'{mouse}_{session_date}_timeseries.parquet.gzip'
+        trials_path = file_path / f'{mouse}_trials.csv'
+        if not (ts_path.exists() & trials_path.exists()):
+            print(f'skipped {mouse} {session_date}')
             continue
+        ts = pd.read_parquet(ts_path)
+        trials = pd.read_csv(trials_path, index_col=0)
 
-        if dm_kwargs:
-            # df_single = make_design_mat(df_single, bdf, **dm_kwargs)
-            raise NotImplementedError
+        fs = ts.session_clock.diff().iloc[2].item()
+        trials, ts = add_behavior_cols(trials, ts, fs)
 
         # If no photometry channels passed QC, move on to next session.
-        df_single = qc.QC_photometry_signal(df_single, mouse, session_date)
-        if df_single is None:
+        # ts = qc.QC_photometry_signal(ts, mouse, session_date)
+        channels = {'z_grnL', 'z_grnR'}
+        sig_cols = {ch for ch in channels if not qc.is_normal(ts[ch])}
+        if not sig_cols:
             continue
+        # Replace channels without signal with NaNs.
+        ts[list(channels - sig_cols)] = np.nan
 
-        trials_matched = qc.QC_included_trials(df_single,
-                                            bdf,
-                                            allow_discontinuity=False,
-                                            drop_enlP=False)
+        if dm_kwargs:
+            ts = make_design_mat(ts, trials, **dm_kwargs)
 
-        multi_sessions = concat_sessions(subsessions=trials_matched,
-                                     full_sessions=multi_sessions,
-                                     mouse=mouse,
-                                     session_date=session_date)
+        # Trial level quality control needs to come at the end.
+        trials_matched = qc.QC_included_trials(ts,
+                                               trials,
+                                               allow_discontinuity=False,
+                                               drop_enlP=False)
+
+        multi_sessions = concat_sessions(sub_sessions=trials_matched,
+                                         full_sessions=multi_sessions,
+                                         mouse=mouse,
+                                         session_date=session_date)
 
     # QC all mice sessions by ENL penalty rate set per mouse
 
     return multi_sessions
+
+
+###################################
+# Functions to set some data paths
+###################################
+
+def set_session_path(root, *, mouse: str = '', session: str = ''):
+
+    full_path = root / 'headfixed_DAB_data/preprocessed_data' / mouse / session
+
+    return full_path
+
+
+def set_data_overview_path(root):
+
+    full_path = root / 'data_overviews'
+
+    return full_path
