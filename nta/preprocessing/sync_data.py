@@ -516,10 +516,11 @@ def map_events_by_time(target_ts: pd.DataFrame,
 
     # Get arrays indices at nearest timepoint to event time in new array.
     event_times = events.session_clock.values
+    event_ids = events[event_col].values
+
     find_nearest_time_ = partial(find_nearest_time, target_ts_.session_clock)
     event_idcs = list(map(find_nearest_time_, event_times))
     event_idcs = target_ts_.iloc[event_idcs].index.values
-    event_ids = events[event_col].values
 
     # For impulse events where on/off indices are the same.
     if onset_only:
