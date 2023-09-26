@@ -6,6 +6,7 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
+from scipy import stats as st
 
 from nta.events.quantify import group_peak_metrics
 
@@ -86,7 +87,7 @@ def align_single_trace(idx: int,
         return np.nan
     try:
         # Get list of indices from timeseries to pull aligned photometry trace
-        idcs = window_interp+idx
+        idcs = window_interp + idx
         if ts.loc[idcs, 'session'].nunique() != 1:
             return np.nan  # don't allow crossing session boundaries
         trace = ts.loc[idcs, y_col].values
@@ -97,13 +98,24 @@ def align_single_trace(idx: int,
         return np.nan  # if missing any values full trace fails
 
 
+def get_sampling_freq(timestamps):
+
+    if isinstance(timestamps, pd.Series):
+        tstep = timestamps.diff().dropna().mode().squeeze()
+    else:
+        tstep = st.mode(np.diff(timestamps), keepdims=False)[0].squeeze()
+    fs = 1 / tstep
+
+    return tstep, fs
+
+
 def align_photometry_to_event(trials: pd.DataFrame,
                               ts_full: pd.DataFrame,
                               *,
                               channel: str | list[str] = None,
                               aligned_event: str = None,
                               window: tuple[int | float, int | float] = (1, 3),
-                              sampling_freq: int = 50,
+                              fs: int = None,
                               quantify_peaks: bool = True,
                               **kwargs
                               ):
@@ -126,7 +138,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
         window:
             Photometry window as (seconds before, seconds after)
             ALIGNED_EVENT.
-        sampling_freq:
+        fs:
             Photometry sampling frequency in Hz.
         quantify_peaks:
             Option to quantify peaks with some default arguments for grouping.
@@ -150,32 +162,41 @@ def align_photometry_to_event(trials: pd.DataFrame,
 
     # Get list of indices for timeseries by trial for each instance of event.
     idx = get_event_indices(ts_full, aligned_event=aligned_event, **kwargs)
-    window_interp, timesteps = interpolate_window(window, sampling_freq)
+
+    if fs is None:
+        _, fs = get_sampling_freq(ts_full.session_clock)
+        print(f' no sampling frequency provided, using {round(fs, 2)} Hz')
+    else:
+        print(f'using provided sampling frequency {fs} Hz')
+    window_interp, timesteps = interpolate_window(window, fs)
 
     for ch in channel:
         # Need full unbroken timeseries of photometry data to properly address
         # trial continuity.
-        align_trace_partial = partial(align_single_trace,
-                                      ts=ts_full,
-                                      window_interp=window_interp,
-                                      y_col=ch)
+        align_trace = partial(align_single_trace,
+                              ts=ts_full,
+                              window_interp=window_interp,
+                              y_col=ch)
 
-        photo_column = f'{aligned_event}_{ch}'
-        times_column = f'{aligned_event}_{ch}_times'
+        photo_col = f'{aligned_event}_{ch}'
+        times_col = f'{aligned_event}_{ch}_times'
 
         # Initialize as NaNs to handle trials without epoch.
-        trials_[photo_column] = np.nan
-        trials_[times_column] = np.nan
+        trials_[photo_col] = np.nan
+        trials_[times_col] = np.nan
 
         # Store snippet of photometry data alongside trial data.
-        trials_[photo_column] = (trials_['nTrial']
-                            .apply(lambda trial: align_trace_partial(idx=idx.get(trial, None))))
+        trials_[photo_col] = (trials_['nTrial']
+                              .apply(lambda i: align_trace(idx=idx
+                                                           .get(i, None))))
 
-        # Map times into full trial table only for trials with complete photometry snippets.
-        trials_with_data = trials_.dropna(subset=[photo_column]).copy()
-        trials_with_data[times_column] = [timesteps]*len(trials_with_data)
-        trials_[times_column] = (trials_['nTrial']
-                                 .map(trials_with_data.set_index('nTrial')[times_column]))
+        # Map times into full trial table only for trials with complete
+        # photometry snippets.
+        trials_w_data = trials_.dropna(subset=[photo_col]).copy()
+        trials_w_data[times_col] = [timesteps] * len(trials_w_data)
+        trials_[times_col] = (trials_['nTrial']
+                              .map(trials_w_data
+                                   .set_index('nTrial')[times_col]))
 
         if quantify_peaks:
             trials_ = group_peak_metrics(trials_,
@@ -189,7 +210,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
 
 
 def interpolate_window(window: tuple[int | float, int | float] = (1, 3),
-                       sampling_freq: int = 50):
+                       fs: float | int = None):
 
     '''
     Generates index interpolation for pre- and post-event window boundaries
@@ -198,7 +219,7 @@ def interpolate_window(window: tuple[int | float, int | float] = (1, 3),
     Args:
         window (tuple):
             Time in seconds before and after alignment event.
-        sampling_freq (int):
+        fs (float | int):
             Sampling rate in Hz.
 
     Returns:
@@ -210,13 +231,14 @@ def interpolate_window(window: tuple[int | float, int | float] = (1, 3),
     '''
 
     pre_window, post_window = window
-    pre_window *= sampling_freq  # convert to number of sampling steps
-    pre_window = int(pre_window)
-    post_window *= sampling_freq  # convert to number of sampling steps
-    post_window = int(post_window)
+    pre_window *= fs  # convert to number of sampling steps
+    pre_window = int(np.ceil(pre_window))
+    post_window *= fs  # convert to number of sampling steps
+    post_window = int(np.ceil(post_window))
 
-    window_interp = np.arange(-pre_window, post_window)  # num steps across window
-    timesteps = window_interp / sampling_freq  # convert to units of seconds
+    # Intrpolate numbere of steps across window (as base for indexing).
+    window_interp = np.arange(-pre_window, post_window + 1)
+    timesteps = window_interp / fs  # convert to units of seconds
 
     return window_interp, timesteps
 
@@ -262,12 +284,12 @@ def trim_trials_without_licks(timeseries: pd.DataFrame, trials: pd.DataFrame):
     '''
 
     trials_trimmed = trials.copy()
-    timeseries_trimmed = timeseries.copy()
+    ts_trimmed = timeseries.copy()
 
     # Get list of trials with completed task state for each epoch.
-    select_trials = trials_licks_in_epoch(timeseries_trimmed, 'Select')
-    consumption_trials = trials_licks_in_epoch(timeseries_trimmed, 'Consumption')
-    cue_trials = timeseries_trimmed.loc[timeseries_trimmed.Cue == 1].nTrial.unique()
+    select_trials = trials_licks_in_epoch(ts_trimmed, 'Select')
+    consumption_trials = trials_licks_in_epoch(ts_trimmed, 'Consumption')
+    cue_trials = ts_trimmed.loc[ts_trimmed.Cue == 1].nTrial.unique()
 
     # Take the set of trials meeting criteria in all epochs.
     included_trials = list(set(select_trials)
@@ -275,13 +297,13 @@ def trim_trials_without_licks(timeseries: pd.DataFrame, trials: pd.DataFrame):
                            .intersection(set(cue_trials)))
 
     # Subset each dataframe by set of trials.
-    timeseries_trimmed = timeseries_trimmed.query('nTrial.isin(@included_trials)').copy()
+    ts_trimmed = ts_trimmed.query('nTrial.isin(@included_trials)').copy()
     trials_trimmed = trials_trimmed.query('nTrial.isin(@included_trials)')
 
-    return timeseries_trimmed, trials_trimmed
+    return ts_trimmed, trials_trimmed
 
 
-def get_lick_times(timeseries: pd.DataFrame,
+def get_lick_times(lick_ts: pd.DataFrame,
                    align_to: str = 'onset',
                    **kwargs
                    ) -> pd.DataFrame:
@@ -292,7 +314,7 @@ def get_lick_times(timeseries: pd.DataFrame,
     ENL state, first Consumption lick.
 
     Args:
-        timeseries:
+        ts:
             Timeseries version of data containing analog states and spout
             contacts.
         align_to:
@@ -306,30 +328,31 @@ def get_lick_times(timeseries: pd.DataFrame,
     '''
 
     # Create a dataframe containing index as nTrial for mapping into.
-    lick_times = pd.DataFrame(index=timeseries.nTrial.unique())
+    lick_times = pd.DataFrame(index=lick_ts.nTrial.unique())
     lick_times.index.name = 'nTrial'
 
     nth_val = 0 if align_to == 'onset' else -1
 
     # Get trial times for nth occurrence of event in each trial
     for event in ['Cue', 'ENLP', 'Select', 'ENL']:
-        if event not in timeseries.columns:
+        if event not in lick_ts.columns:
             continue
-        data_during_event = timeseries.loc[timeseries[event] == 1].copy()
-        trials_with_event = data_during_event.nTrial.unique()
-        lick_times.loc[trials_with_event, event] = (data_during_event
-                                                    .groupby('nTrial')
-                                                    .nth(nth_val)['trial_clock'].values)
+        data_during_event = lick_ts.loc[lick_ts[event] == 1].copy()
+        trials_w_event = data_during_event.nTrial.unique()
+        lick_times.loc[trials_w_event, event] = (data_during_event
+                                                 .groupby('nTrial')
+                                                 .nth(nth_val)['trial_clock']
+                                                 .values)
 
-    # As above for Consumption, for first lick only
+    # As above for Consumption, for first lick only (First Outcome Lick -> fol)
     # (requires extra conditioning on spout contact).
-    first_outcome_lick_idx = (timeseries
-                              .query('Consumption==1 & ~iSpout.isna()')
-                              .groupby('nTrial', as_index=False)
-                              .nth(0).index)
-    first_outcome_lick_trials = timeseries.loc[first_outcome_lick_idx].nTrial.unique()
-    first_outcome_lick_times = timeseries.loc[first_outcome_lick_idx].trial_clock.values
-    lick_times.loc[first_outcome_lick_trials, 'Consumption'] = first_outcome_lick_times
+    fol_idx = (lick_ts
+               .query('Consumption==1 & ~iSpout.isna()')
+               .groupby('nTrial', as_index=False)
+               .nth(0).index)
+    fol_trials = lick_ts.loc[fol_idx].nTrial.unique()
+    fol_times = lick_ts.loc[fol_idx].trial_clock.values
+    lick_times.loc[fol_trials, 'Consumption'] = fol_times
 
     return lick_times.reset_index()
 
@@ -338,7 +361,7 @@ def trials_by_time_array(trials: pd.DataFrame,
                          channel: str,
                          align_event: str,
                          win: tuple[int | float, int | float] = None,
-                         FS: int = 50):
+                         fs: int = None):
 
     '''
     Create simple array containing event-aligned neural traces stacked by
@@ -354,7 +377,7 @@ def trials_by_time_array(trials: pd.DataFrame,
             Behavior or task event neural traces are aligned to.
         win:
             Duration of time to plot before and after align_event, in seconds.
-        FS:
+        fs:
             Sampling frequency in Hz of neural data.
 
     Returns:
@@ -383,17 +406,26 @@ def trials_by_time_array(trials: pd.DataFrame,
 
     # Stack event-aligned timeseries into array: timepoints x trials.
     exploded_trials = trials_clean.explode(column=[photo_col, time_col])
+    if fs is None:
+        # Calculate sampling frequency on one sample trial.
+        tstep, fs = get_sampling_freq(exploded_trials[time_col])
+        print(f'no sampling frequency provided, using {round(fs, 2)} Hz')
+    else:
+        print(f'using provided sampling frequency {fs} Hz')
 
     if win:
         within_window = exploded_trials[time_col].between(-win[0], win[1],
                                                           inclusive='both')
         exploded_trials = exploded_trials.loc[within_window]
-        n_timepoints = len(np.arange(-win[0], win[1]+(1/FS), step=1/FS))
+        # n_timepoints = len(np.arange(-win[0], win[1] + tstep, step=tstep))
+        n_timepoints = (exploded_trials
+                        .groupby('nTrial')[time_col]
+                        .count().unique().squeeze())
     else:
         n_timepoints = len(trials_clean[photo_col].iloc[0])
 
     timestamps = exploded_trials[time_col].unique()
-    n_trials = exploded_trials.nTrial.nunique()
+    n_trials = exploded_trials.nTrial.dropna().nunique()
     exploded_traces = exploded_trials[photo_col].astype('float')
     trials_by_time = (np.array(exploded_traces.dropna())
                         .reshape(n_trials, n_timepoints)
@@ -429,7 +461,8 @@ def sort_by_trial_type(trials: pd.DataFrame,
     '''
 
     trials_ = trials.copy()
-    time_col = 'tSelection' if 'tSelection' in trials_.columns else 't_cue_to_sel'
+    time_col = ('tSelection' if 'tSelection' in trials_.columns
+                else 't_cue_to_sel')
 
     # Sort trials in trial table by selection time, reward outcome, and task
     # variable.

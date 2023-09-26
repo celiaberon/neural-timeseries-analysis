@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from nta.events.align import sort_by_trial_type, trials_by_time_array
+from nta.events.align import (get_sampling_freq, sort_by_trial_type,
+                              trials_by_time_array)
 from nta.features.select_trials import subsample_trial_types
 
 sns.set(style='whitegrid',
@@ -17,7 +18,8 @@ sns.set(style='whitegrid',
 
 
 def add_relative_timing_columns(timeseries: pd.DataFrame,
-                                trials: pd.DataFrame):
+                                trials: pd.DataFrame,
+                                fs: int | float = None):
 
     '''
     Create columns for relative timing of major behavior/task events, with all
@@ -46,7 +48,7 @@ def add_relative_timing_columns(timeseries: pd.DataFrame,
                   .groupby('nTrial', as_index=False)
                   .agg({'Consumption': np.sum, 'stateConsumption': np.sum}))
     lick_delay['t_sel_to_cons'] = (lick_delay.stateConsumption
-                                   - lick_delay.Consumption) * (1/50)
+                                   - lick_delay.Consumption) * (1 / fs)
 
     lick_delay_trial_lut = lick_delay.set_index('nTrial')['t_sel_to_cons']
     trials_['t_sel_to_cons'] = (trials_['nTrial'].map(lick_delay_trial_lut))
@@ -96,7 +98,7 @@ def scatter_behavior_events(trials: pd.DataFrame,
                             ax,
                             align_event: str,
                             window: tuple,
-                            fs: int = 50
+                            fs: int | float = None
                             ):
 
     '''
@@ -119,8 +121,15 @@ def scatter_behavior_events(trials: pd.DataFrame,
         ax:
             Updated axis object containing scatterplot of event times.
     '''
+    if fs is None:
+        # Calculate sampling frequency on one sample trial.
+        tstep, fs = get_sampling_freq(trials[f'{align_event}_times'].iloc[0])
+        print(f'no sampling frequency provided, using {round(fs, 2)} Hz')
+    else:
+        print(f'using provided sampling frequency {fs} Hz')
+        tstep = 1 / fs
 
-    tstep = 1/fs  # timestep in seconds
+    # tstep = 1 / fs  # timestep in seconds
     color_dict = {'selection lick': 'w',
                   'first consumption lick': 'k',
                   'cue onset': sns.color_palette('colorblind')[3]}
@@ -128,7 +137,7 @@ def scatter_behavior_events(trials: pd.DataFrame,
     other_events, labels = define_relative_events(align_event)
 
     basic_scatterplot = partial(sns.scatterplot,
-                                y=np.arange(0.5, len(trials)+0.5),
+                                y=np.arange(0.5, len(trials) + 0.5),
                                 ax=ax,
                                 marker='.',
                                 edgecolor=None,
@@ -147,7 +156,7 @@ def scatter_behavior_events(trials: pd.DataFrame,
 
     # Scatterplot for align_event as x=0 for each trial.
     align_event_label = [k for k in color_dict if align_event.lower() in k][0]
-    basic_scatterplot(x=window[0]/tstep,
+    basic_scatterplot(x=window[0] / tstep,
                       color=color_dict[align_event_label],
                       label=align_event_label
                       )
@@ -162,7 +171,7 @@ def label_trial_types(ax,
                       trials: pd.DataFrame = None,
                       task_variable: str = None,
                       trial_type_palette=None,
-                      tstep: float = 1/50,
+                      tstep: float = 1 / 50,
                       include_label: bool = True):
 
     '''
@@ -194,7 +203,7 @@ def label_trial_types(ax,
     ymax = 0  # initialize at origin
 
     x_scale_factor = np.abs(ax.get_xlim()).sum()
-    x_offset = x_scale_factor / (500*tstep)
+    x_offset = x_scale_factor / (500 * tstep)
 
     for i, (key, grp) in enumerate(trials.groupby(task_variable, sort=False)):
 
@@ -207,7 +216,7 @@ def label_trial_types(ax,
         # Set y-bounds for trial type bar label and vertically center text.
         ymin = ymax
         ymax += len(grp)
-        text_y = (ymax+ymin)/2
+        text_y = (ymax + ymin) / 2
         ax.vlines(x=-.5,
                   ymin=ymin,
                   ymax=ymax,
@@ -268,7 +277,7 @@ def get_cmap_range(trials: pd.DataFrame,
 
 
 def center_xticks_around_zero(tstamps: list,
-                              freq: float | int,
+                              fs: float | int,
                               tick_interval: int = None):
 
     '''
@@ -292,14 +301,13 @@ def center_xticks_around_zero(tstamps: list,
 
     # Set tick interval in units of seconds, defaults to 1s.
     if tick_interval is None:
-        tick_interval = freq
+        tick_interval = fs
     else:
-        tick_interval *= freq
-        tick_interval = int(tick_interval)
+        tick_interval *= fs
+    tick_interval = int(np.ceil(tick_interval))
 
     # Find index at which x=0 seconds.
     center_idx = np.where(tstamps == 0)[0][0]
-
     # Piecewise create list of indices for tick positions at tick_interval.
     pre_window_idcs = np.arange(center_idx, -1, step=-tick_interval)
     pre_window_idcs = pre_window_idcs[pre_window_idcs >= 0]  # positive idcs
@@ -308,6 +316,7 @@ def center_xticks_around_zero(tstamps: list,
 
     # Get tick labels from timestamp list.
     xtick_labels = tstamps[xticks]
+    xtick_labels = [round(tick_label, 1) for tick_label in xtick_labels]
 
     return xticks, xtick_labels
 
@@ -349,7 +358,7 @@ def plot_heatmap(heatmap_array: np.array,
     np.random.seed(0)  # seed for consistent subsampling.
 
     # Convert window boundaries from time (secs) to index points for x-axis.
-    freq = round(1/np.diff(tstamps[:2])[0])  # number of samples per second
+    tstep, fs = get_sampling_freq(tstamps)
 
     # Alignment errors if window length dims not specified properly.
     assert len(tstamps) == heatmap_array.shape[1]
@@ -371,11 +380,11 @@ def plot_heatmap(heatmap_array: np.array,
 
     # Label groups of trial types.
     ax = label_trial_types(ax=ax,
-                           tstep=1/freq,
+                           tstep=tstep,
                            **kwargs)
 
     xticks, xticklabels = center_xticks_around_zero(tstamps,
-                                                    freq,
+                                                    fs,
                                                     tick_interval=1.0)
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticklabels, rotation=0)
@@ -461,7 +470,7 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
         alignment_states = ['Cue', 'Select', 'Consumption']
 
     if figsize is None:
-        figsize = (3.*len(alignment_states), 2.0)
+        figsize = (3. * len(alignment_states), 2.0)
 
     fig, axs = plt.subplots(ncols=len(alignment_states),
                             figsize=figsize,
@@ -504,10 +513,10 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
                           **kwargs)
 
         # Convert window boundaries from time (secs) to idx points for x-axis.
-        freq = round(1/np.diff(timestamps[:2])[0])  # num samples per second
+        tstep, fs = get_sampling_freq(timestamps)
 
         # Overlay scatterplot of behavior events for each trial's timeseries.
-        ax = scatter_behavior_events(trials_, ax, state, win, fs=freq)
+        ax = scatter_behavior_events(trials_, ax, state, win, fs=fs)
 
     # Rescale colorbar to fit plot.
     fig, axs = create_scaled_colorbar(fig, axs, vmin, vmax)
