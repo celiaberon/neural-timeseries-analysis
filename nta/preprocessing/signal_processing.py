@@ -321,13 +321,15 @@ def get_tdt_streams(tdt_data) -> tuple[list, list, list, list]:
     # Get trace names and store in this list for ingestion
     labels = np.array(('grnR', 'redR', 'grnL', 'redL'))
     raw_photoms: list[np.array] = np.array([photom_g_right, photom_r_right,
-                                            photom_g_left, photom_r_left])
+                                            photom_g_left, photom_r_left],
+                                           dtype='object')
     raw_carriers: list[np.array] = np.array([carrier_g_right, carrier_r_right,
-                                             carrier_g_left, carrier_r_left])
+                                             carrier_g_left, carrier_r_left],
+                                            dtype='object')
     carrier_vals: list[float] = np.array([carrier_val_g_right,
                                           carrier_val_r_right,
                                           carrier_val_g_left,
-                                          carrier_val_r_left])
+                                          carrier_val_r_left], dtype='object')
 
     # Determine fibers that were on from standard deviation on data stream.
     active_channels = [i for i, cf in enumerate(raw_carriers) if
