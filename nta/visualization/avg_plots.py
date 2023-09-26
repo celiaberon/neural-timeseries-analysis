@@ -79,12 +79,12 @@ def set_new_axes(n_iters: list,
     else:
         subplot_width, subplot_height = figsize
 
-    nrows = int(np.ceil(n_iters[0]/3))
+    nrows = int(np.ceil(n_iters[0] / 3))
     ncols = min(n_iters[0], 3)
 
-    dims = (subplot_width*ncols, subplot_height*nrows)
+    dims = (subplot_width * ncols, subplot_height * nrows)
     if behavior_hist:  # 2 plots per alignment with behavior distributions
-        fig, axs = plt.subplots(nrows=2*nrows, ncols=ncols,
+        fig, axs = plt.subplots(nrows=2 * nrows, ncols=ncols,
                                 figsize=dims,
                                 sharex=True,
                                 gridspec_kw={'height_ratios': (3, 1)})
@@ -112,7 +112,7 @@ def set_current_axes(axs,
 
     if n_iters[0] > 1:
         ax1 = axs.flatten()[n_iters[1]]
-        ax2 = axs.flatten()[n_iters[1]+ncols] if behavior_hist else None
+        ax2 = axs.flatten()[n_iters[1] + ncols] if behavior_hist else None
         # n_iters[1] += 1 # mutable update globally
     else:
         ax1, ax2 = axs
@@ -210,7 +210,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
         **kwargs:
             ls_col:
                 Second column to condition plotting on (line style).
-            legend_set:
+            show_leg:
                 Whether or not to include legend in plot.
             ...
 
@@ -243,10 +243,10 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
     # Core plotting function regardless of individual trial traces or group
     # mean.
     lineplot_core = partial(sns.lineplot,
+                            data=ts,
                             x=f'{y_col}_times',
                             y=y_col,
                             hue=column,
-                            data=ts,
                             ax=ax1,
                             palette=cpal)
 
@@ -310,7 +310,7 @@ def plotting_wrapper(trials: pd.DataFrame,
 
     # Iteratively fill subplots with each event-alignd photometry trace.
     for plot_iter, event in enumerate(alignment_states, start=1):
-        n_iters = [len(alignment_states), plot_iter-1]
+        n_iters = [len(alignment_states), plot_iter - 1]
         photometry_column = f'{event}_{channel}'
         exploded_trials = (trials.copy()
                            .dropna(subset=[photometry_column])
@@ -321,7 +321,7 @@ def plotting_wrapper(trials: pd.DataFrame,
                                               align_event=event,
                                               y_col=photometry_column,
                                               n_iters=n_iters,
-                                              legend_set=plot_iter >= n_iters[0],
+                                              show_leg=plot_iter >= n_iters[0],
                                               fig=fig,
                                               axs=axs,
                                               window=window,
@@ -334,8 +334,8 @@ def config_plot(ax,
                 y_col: str,
                 column: str,
                 ts_channel: pd.Series,
-                legend_set: bool = False,
-                ylim: tuple = None, #(-2, 3),
+                show_leg: bool = False,
+                ylim: tuple = None,  # (-2, 3),
                 ls_col=False,
                 window: tuple = (1, 3),
                 **kwargs):
@@ -347,19 +347,19 @@ def config_plot(ax,
 
     align_event = y_col.split('_')[0]
     if ylim is None:
-        ymin = np.mean(ts_channel) - 3 * np.std(ts_channel)
-        ymax = np.mean(ts_channel) + 3 * np.std(ts_channel)
+        ymin = np.mean(ts_channel) - 0.8 * np.abs(np.min(ts_channel))
+        ymax = np.mean(ts_channel) + 0.8 * np.max(ts_channel)
         ylim = (ymin, ymax)
     ax.axvline(x=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0,
                label=None)
     ax.axhline(y=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0)
     ax.set(xlabel='Time (s)', ylabel='z-score', ylim=ylim)
-    ax.text(x=-0.05, y=ylim[1] + 0.1*sum(ylim), s=align_event)
+    ax.text(x=-0.05, y=ylim[1] + 0.1 * sum(ylim), s=align_event)
     ticks = ax.get_xticks()
     ax.set_xticks([int(tick) for tick in ticks if tick.is_integer()])
     ax.set(xlim=(-window[0], window[1]))
 
-    if not legend_set:
+    if not show_leg:
         ax.legend().set_visible(False)
     else:
         ax.legend(bbox_to_anchor=(1, 1), loc='upper left', frameon=False,
@@ -383,10 +383,12 @@ def behavior_event_distributions(ts,
                                  ax,
                                  *,
                                  graded_cue: bool = False,
-                                 legend_set: bool = False,
+                                 show_leg: bool = False,
                                  **kwargs):
 
-    lick_times = get_lick_times(**kwargs)
+    all_events_ts = kwargs.pop('lick_ts')
+    all_events_ts = all_events_ts.query('nTrial.isin(@ts.nTrial.unique())')
+    lick_times = get_lick_times(lick_ts=all_events_ts, **kwargs)
 
     # Default approach, calculate relative timing of 2 distributions to
     # aligned event.
@@ -400,15 +402,18 @@ def behavior_event_distributions(ts,
     if 'ENL' in align_event:
         ts_ = ts.copy().groupby('nTrial')['T_ENL'].nth(0)
         lick_times['T_ENL'] = lick_times['nTrial'].map(ts_)
-        plotting_kwargs = {'palette': sns.color_palette('Greys', n_colors=6)[1:],
+        plotting_kwargs = {'palette': sns.color_palette('Greys', 6)[1:],
                            'hue': 'T_ENL'}
 
     elif 'fake_event' in align_event:  # For null comparisons
-        fake_events = ts.query('fake_event==1')
-        fake_event_trials = fake_events.nTrial.unique()
-        fake_event_times = fake_events.groupby('nTrial').nth(0)['trial_clock'].values
+        fake_events = ts.query('fake_event == 1')
+        event_times = (fake_events
+                       .groupby('nTrial')
+                       .nth(0)['trial_clock'].values)
         lick_times['fake_event'] = np.nan
-        lick_times.query('nTrial.isin(@fake_event_trials)')['fake_event'] = fake_event_times
+        trial_ids = fake_events.nTrial.unique()
+        lick_times.loc[lick_times.nTrial.isin(trial_ids),
+                       'fake_event'] = event_times
 
     ylim_ub = []
     for event in ['Cue', 'Select', 'Consumption']:
@@ -424,7 +429,8 @@ def behavior_event_distributions(ts,
         if event == align_event:
             ax.axvline(x=0, color=state_colors[event])
         else:
-            lick_times[f'{event} time'] = lick_times[event] - lick_times[align_event]
+            lick_times[f'{event} time'] = (lick_times[event]
+                                           - lick_times[align_event])
             sns.histplot(data=lick_times, x=f'{event} time', ax=ax,
                          binwidth=0.05, alpha=0.7,
                          label=event, stat='probability',
@@ -432,9 +438,10 @@ def behavior_event_distributions(ts,
                          **plotting_kwargs)
             ylim_ub.append(ax.get_ylim()[1])
 
-    ax.set(ylabel='fraction\ntrials', xlabel='Time (s)', ylim=(0, max(ylim_ub)))
+    ax.set(ylabel='fraction\ntrials', xlabel='Time (s)',
+           ylim=(0, max(ylim_ub)))
 
-    if not legend_set:
+    if not show_leg:
         ax.legend().set_visible(False)
 
     else:
@@ -447,8 +454,9 @@ def behavior_event_distributions(ts,
         def custom_patch(key, color):
             from matplotlib.patches import Patch
             return Patch(facecolor=color, edgecolor=None, label=key, alpha=0.7)
-        legend_elements = [custom_patch(key, color) for key, color in state_colors.items()]
-        ax.legend(handles=legend_elements, bbox_to_anchor=(1, 1.5),
+        leg_elements = [custom_patch(key, col)
+                        for key, col in state_colors.items()]
+        ax.legend(handles=leg_elements, bbox_to_anchor=(1, 1.5),
                   loc='upper left', frameon=False, markerscale=0.5,
                   )
 

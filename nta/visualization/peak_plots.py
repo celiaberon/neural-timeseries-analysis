@@ -23,7 +23,7 @@ def initialize_peak_fig(states,
             rc={'axes.labelsize': 12,
                 'axes.titlesize': 12,
                 'savefig.transparent': True,
-                'legend.frameon':  False
+                'legend.frameon': False
                 })
 
     if states:
@@ -36,7 +36,7 @@ def initialize_peak_fig(states,
                   ['Cue', 'no reward'],
                   ['.', 'no reward']]
     if figsize == (3.5, 4.) and (states or flatten_layout):
-        figsize = (2*len(layout[0]), 2)
+        figsize = (2 * len(layout[0]), 2)
 
     fig, ax = plt.subplot_mosaic(layout, figsize=figsize, **kwargs)
 
@@ -87,7 +87,7 @@ def plot_and_recolor(plot_func,
               order=order)
 
     for i, box in enumerate(ax.artists):
-        key = order[i//hue_factor]
+        key = order[i // hue_factor]
         box.set_facecolor(color_palette[key])
         box.set_hatch(hatch_styles[i % hue_factor])
 
@@ -115,7 +115,7 @@ def exclude_outliers(peaks, x_col, y_col):
 
     def get_num_outliers(column):
 
-        outliers = 1-not_outlier(column)
+        outliers = 1 - not_outlier(column)
         print(f'{round(np.mean(outliers),3)} points removed as outliers')
 
     def not_outlier(column):
@@ -123,8 +123,8 @@ def exclude_outliers(peaks, x_col, y_col):
         q1 = np.percentile(column, 25)
         q3 = np.percentile(column, 75)
         iqr = q3 - q1
-        lower_bound = q1 - (1.5*iqr)
-        upper_bound = q3 + (1.5*iqr)
+        lower_bound = q1 - (1.5 * iqr)
+        upper_bound = q3 + (1.5 * iqr)
         return (column > lower_bound) & (column < upper_bound)
 
     peaks_ = peaks.dropna(subset=[y_col]).copy()
