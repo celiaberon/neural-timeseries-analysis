@@ -274,7 +274,8 @@ def process_trace(raw_photoms: list[np.array],
     return processed_trace
 
 
-def get_tdt_streams(tdt_data) -> tuple[list, list, list, list]:
+def get_tdt_streams(tdt_data, sig_thresh: float = 0.05
+                    ) -> tuple[list, list, list, list]:
 
     '''
     Extract standard set of timeseries from TDT object. Filter by channels
@@ -283,6 +284,9 @@ def get_tdt_streams(tdt_data) -> tuple[list, list, list, list]:
     Args:
         tdt_data:
             Object read in from TDT files.
+        sig_thresh:
+            Threshold for minimum standard deviation on measured carrier
+            signal channel to pass for active channel collection.
 
     Returns:
         labels:
@@ -321,19 +325,17 @@ def get_tdt_streams(tdt_data) -> tuple[list, list, list, list]:
     # Get trace names and store in this list for ingestion
     labels = np.array(('grnR', 'redR', 'grnL', 'redL'))
     raw_photoms: list[np.array] = np.array([photom_g_right, photom_r_right,
-                                            photom_g_left, photom_r_left],
-                                           dtype='object')
+                                            photom_g_left, photom_r_left])
     raw_carriers: list[np.array] = np.array([carrier_g_right, carrier_r_right,
-                                             carrier_g_left, carrier_r_left],
-                                            dtype='object')
+                                             carrier_g_left, carrier_r_left])
     carrier_vals: list[float] = np.array([carrier_val_g_right,
                                           carrier_val_r_right,
                                           carrier_val_g_left,
-                                          carrier_val_r_left], dtype='object')
+                                          carrier_val_r_left])
 
     # Determine fibers that were on from standard deviation on data stream.
     active_channels = [i for i, cf in enumerate(raw_carriers) if
-                       np.std(cf[100000:]) > 0.05]
+                       np.std(cf[100000:]) > sig_thresh]
 
     return (labels[active_channels], raw_photoms[active_channels],
             raw_carriers[active_channels], carrier_vals[active_channels])
