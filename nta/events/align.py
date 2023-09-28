@@ -6,9 +6,10 @@ from functools import partial
 
 import numpy as np
 import pandas as pd
-from scipy import stats as st
 
 from nta.events.quantify import group_peak_metrics
+
+# from scipy import stats as st
 
 
 def get_event_indices(timeseries: pd.DataFrame,
@@ -91,8 +92,7 @@ def align_single_trace(idx: int,
         if ts.loc[idcs, 'session'].nunique() != 1:
             return np.nan  # don't allow crossing session boundaries
         trace = ts.loc[idcs, y_col].values
-
-        return np.nan if np.any(np.isnan(trace)) else trace
+        return np.nan if np.any(np.isnan(trace.astype('float'))) else trace
 
     except KeyError:
         return np.nan  # if missing any values full trace fails
@@ -100,10 +100,39 @@ def align_single_trace(idx: int,
 
 def get_sampling_freq(timestamps):
 
-    if isinstance(timestamps, pd.Series):
-        tstep = timestamps.diff().dropna().mode().squeeze()
+    '''
+    Calculate a sampling frequency based on the interval between timesteps in
+    timeseries.
+
+    Args:
+        timestamps:
+            Series of timestamps corresponding to sampling rate for data.
+
+    Returns:
+        tstep:
+            Interval (in seconds) between individual samples in the data.
+        fs:
+            Sampling frequency (in Hz) of the timeseries.
+    '''
+    if not isinstance(timestamps, pd.Series):
+        # tstep = st.mode(np.diff(timestamps), keepdims=False)[0].squeeze()
+        tstamps = pd.Series(timestamps)
     else:
-        tstep = st.mode(np.diff(timestamps), keepdims=False)[0].squeeze()
+        tstamps = timestamps.copy()
+
+    tsteps = (tstamps
+              .reset_index(drop=True)
+              .diff()
+              .dropna()
+              .astype('float64')
+              .round(6))
+    tsteps_consistency = (tsteps
+                          .value_counts(normalize=True)
+                          .max() > 0.99)
+
+    assert tsteps_consistency > 0.99, 'multiple sampling rates detected'
+
+    tstep = tsteps.mode().squeeze()
     fs = 1 / tstep
 
     return tstep, fs
