@@ -11,7 +11,9 @@ import numpy as np
 import pandas as pd
 
 
-def create_combo_col(data: pd.DataFrame, grouping_levels: list):
+def create_combo_col(data: pd.DataFrame,
+                     grouping_levels: list[str],
+                     generic_col_name: bool = True):
 
     '''
     Create column with unique identifier for every combination of conditions
@@ -30,10 +32,11 @@ def create_combo_col(data: pd.DataFrame, grouping_levels: list):
     '''
 
     data_ = data.copy()
-    data_['combo_col'] = ''
+    combo_col = 'combo_col' if generic_col_name else '_'.join(grouping_levels)
+    data_[combo_col] = ''
     for i, col in enumerate(grouping_levels):
         prefix = '' if i == 0 else '_'
-        data_['combo_col'] += prefix + data_[col].astype(str)
+        data_[combo_col] += prefix + data_[col].astype(str)
 
     return data_
 

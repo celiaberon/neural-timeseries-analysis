@@ -334,7 +334,7 @@ def add_behavior_cols(trials: pd.DataFrame,
         trials_ = convert_to_AB_sequence(trials_, sequence_length=h_length)
 
     # Some additional columns that can be useful.
-    ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
+    # ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
     trials_['nLicks'] = count_consumption_licks(ts_, trials_)
     ts_['iLick'] = label_lick_position(ts_)
 

@@ -5,7 +5,7 @@ import pandas as pd
 def check_group_size(grouped_data,
                      n_samples: int,
                      min_frac_samples: float=0.5):
-    
+
     '''
     Confirm each group contains at least X% trials of target sample size.
 
@@ -40,7 +40,7 @@ def resample_and_balance(trial_data: pd.DataFrame,
     Balance trial types based on trial variable, using sampling with
     replacement within each trial type to reach target sample number for each
     group.
-    
+
     Args:
         trial_data:
             Original trial dataframe with trial type events occurring at
@@ -72,7 +72,7 @@ def resample_and_balance(trial_data: pd.DataFrame,
     check_group_size(imbalanced_data, n_samples=n_samples)
 
     balanced_data = (imbalanced_data
-                    .sample(n=n_samples, replace=True, random_state=seed))
+                     .sample(n=n_samples, replace=True, random_state=seed))
 
     return balanced_data
 
@@ -85,7 +85,7 @@ def subsample_trial_types(trials: pd.DataFrame,
     '''
     Sample from each trial type without replacement up to target number of
     trials.
-    
+
     Args:
         trials:
             Dataframe containing trial level information.
@@ -102,9 +102,9 @@ def subsample_trial_types(trials: pd.DataFrame,
     '''
 
     grp_trials = (trials
-              .copy()
-              .reset_index(drop=True)
-              .groupby(task_variable))
+                  .copy()
+                  .reset_index(drop=True)
+                  .groupby(task_variable))
 
     try:
         check_group_size(grp_trials, n_samples=n_samples, min_frac_samples=1.0)
@@ -116,5 +116,5 @@ def subsample_trial_types(trials: pd.DataFrame,
         for _, grp in grp_trials:
             N = min((len(grp), n_samples))
             sampled_trials = pd.concat((sampled_trials, grp.sample(n=N)))              
-    
+
     return sampled_trials

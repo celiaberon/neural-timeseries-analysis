@@ -89,7 +89,7 @@ def pull_lick_from_bout(timeseries: pd.DataFrame,
         lick_subset = ts_.loc[ts_[state_licks] == 1]
         nth_lick_idcs = (lick_subset
                          .groupby('nTrial', as_index=False)
-                         .nth(nth_lick-1)
+                         .nth(nth_lick - 1)
                          .index)
 
         # Create column containing nth lick events only.
@@ -128,7 +128,7 @@ def event_interactions_dummies(timeseries: pd.DataFrame,
         states:
             List of lick-states to interact with trial variables.
         trial_type:
-            Column to interact with lick-states (e.g. 'Reward' or 'h2').
+            Column to interact with lick-states (e.g. 'Reward' or 'seq2').
         as_dummy:
             If True, create dummy variables for each value in `trial_type`
             column; if False (only in case of binary variable), symmetric
@@ -212,13 +212,13 @@ def add_heatmap_columns(timeseries, trials):
                .diff(axis='columns')
                .rename(columns={'stateConsumption': 't_sel_to_cons'}))
     ts_['hm_t_sel_to_cons'] = (ts_['nTrial']
-                               .map(latency['t_sel_to_cons'] * (1000/50)))
+                               .map(latency['t_sel_to_cons'] * (1000 / 50)))
     ts_['hm_t_cue_off_to_cons'] = (ts_['hm_t_sel_to_cons']
                                    + ts_['hm_t_cue_off_to_sel'])
 
     # Store additional columns for post-model conditioning.
-    hm_cols = ['Reward', 'h2', 'seq2', 'outcome_seq', # 'outcome_seq_history',
-               'h2_+1sw']
+    hm_cols = ['Reward', 'seq2', 'outcome_seq',  # 'outcome_seq_history', 'h2',
+               'seq2_+1switch']  # 'h2_+1sw
     for col in hm_cols:
         ts_[f'hm_{col}'] = ts_['nTrial'].map(trials[col])
 
@@ -267,7 +267,7 @@ def track_enl_period(timeseries: pd.DataFrame,
 
     ts_ = timeseries.copy()
     ts_[f't_to_{enl_col.lower()}_on'] = 0  # 0 outside of ENL period
-    enl = ts_.query(f'{enl_col} == 1 | Cue == 1')
+    enl = ts_.query(f'{enl_col} == 1')
 
     # Scaling factor to keep within similar range of other features.
 
@@ -346,7 +346,7 @@ def make_design_mat(timeseries: pd.DataFrame,
         # need Consumption period for keeping trial durations constant
         tmp_lick_states = {'Consumption'} - states
 
-    trials = create_combo_col(trials, grouping_levels=['h2', '+1sw'],
+    trials = create_combo_col(trials, grouping_levels=['seq2', '+1switch'],
                               generic_col_name=False)
 
     trials = (trials.set_index('nTrial')  # for mapping to timeseries
@@ -365,7 +365,10 @@ def make_design_mat(timeseries: pd.DataFrame,
     ts_ = track_enl_period(ts_, method='exponential')
 
     # Make design matrix only containing licks and essential trial IDs.
-    dm_cols = lick_cols + ['nTrial', 'iBlock', 't_to_enl_on'] + photo_cols
+    dm_cols = (lick_cols
+               + ['nTrial', 'iBlock', 't_to_enl_on', 'session',
+                  'session_clock']
+               + photo_cols)
     dm = ts_[dm_cols].copy()
 
     # Represent cue as impulse occurring at cue onset time.
