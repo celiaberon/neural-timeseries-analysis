@@ -39,6 +39,9 @@ def add_relative_timing_columns(timeseries: pd.DataFrame,
 
     CUE_DURATION = 0.08
 
+    if fs is None:
+        tstep, fs = get_sampling_freq(timeseries.session_clock)
+
     trials_ = trials.copy()
     trials_['t_cue_to_sel'] = (trials_['tSelection'] / 1000) + CUE_DURATION
 
