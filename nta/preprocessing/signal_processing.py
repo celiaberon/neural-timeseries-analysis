@@ -185,6 +185,7 @@ def rolling_demodulation(trace: np.array,
                          sampling_Hz: int | float = None,
                          nperseg: int = 0,
                          noverlap: int = 0,
+                         nnearest: int = 2,
                          **kwargs):
 
     '''
@@ -203,6 +204,9 @@ def rolling_demodulation(trace: np.array,
         noverlap:
             Number of samples overlapping between subsequent windows (usually
             set as 50% nperseg).
+        nnearest:
+            Number of frequency bands to select from the spectrogram for
+            demodulation.
 
     Returns:
         rolling_demod:
@@ -219,10 +223,13 @@ def rolling_demodulation(trace: np.array,
                                     nperseg=nperseg,
                                     noverlap=noverlap)
     power_spectra = np.abs(Zxx)
-    freq_ind = np.argmin(np.abs(f - carrier_freq))
+    if nnearest == 1:
+        freq_ind = np.argmin(np.abs(f - carrier_freq))
+    else:
+        freq_ind = np.argsort(np.abs(f - carrier_freq))[:nnearest]
     # frequency_resolution = np.diff(f)[0]
     # nearest_freq = f[freq_ind]
-    rolling_demod = power_spectra[freq_ind, :]
+    rolling_demod = power_spectra[freq_ind, :].mean(axis=0)
 
     return rolling_demod, t_
 
@@ -324,10 +331,17 @@ def get_tdt_streams(tdt_data, sig_thresh: float = 0.05
 
     # Get trace names and store in this list for ingestion
     labels = np.array(('grnR', 'redR', 'grnL', 'redL'))
+
+    if len(photom_g_left) != len(photom_g_right):
+        use_dtype = 'object'
+    else:
+        use_dtype = 'float32'
     raw_photoms: list[np.array] = np.array([photom_g_right, photom_r_right,
-                                            photom_g_left, photom_r_left])
+                                            photom_g_left, photom_r_left],
+                                           dtype=use_dtype)
     raw_carriers: list[np.array] = np.array([carrier_g_right, carrier_r_right,
-                                             carrier_g_left, carrier_r_left])
+                                             carrier_g_left, carrier_r_left],
+                                            dtype=use_dtype)
     carrier_vals: list[float] = np.array([carrier_val_g_right,
                                           carrier_val_r_right,
                                           carrier_val_g_left,
