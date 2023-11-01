@@ -228,14 +228,17 @@ def load_session_log(path_to_file: str):
     Returns:
         session_log:
             DataFrame containing session summary quality control stats.
-        previous sessions:
+        logged_sessions:
             List of sessions already included in session_log.
     '''
 
     try:
-        return pd.read_csv(path_to_file, index_col=None)
+        session_log = pd.read_csv(path_to_file, index_col=None)
+        logged_sessions = ['_'.join(sess)
+                           for sess in session_log[['Mouse', 'Date']].values]
+        return session_log, logged_sessions
     except FileNotFoundError:
-        return pd.DataFrame()
+        return pd.DataFrame(), []
 
 
 def save_session_log(sess_qc: pd.DataFrame,
@@ -260,7 +263,14 @@ def save_session_log(sess_qc: pd.DataFrame,
         root = input('Please provide a path for logging:')
     filename = f'session_log_{fname_suffix}.csv'
     path_to_file = os.path.join(root, filename)
-    session_log = load_session_log(path_to_file)
+    session_log, logged_sessions = load_session_log(path_to_file)
+
+    curr_session = f'{sess_qc.Mouse.item()}_{sess_qc.Date.item()}'
+    if curr_session not in logged_sessions:
+        tmp_log = pd.DataFrame({'Mouse': sess_qc['Mouse'].item(),
+                               'Date': sess_qc['Date'].item()},
+                               index=[0])
+        session_log = pd.concat((session_log, tmp_log)).reset_index(drop=True)
 
     if 'N_valid_trials' not in session_log.columns:
         updated_log = pd.merge(session_log, sess_qc,
