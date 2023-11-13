@@ -16,10 +16,12 @@ from nta.features.design_mat import make_design_mat
 
 
 def sessions_to_load(mouse: str,
+                     dataset: str,
                      *,
                      root: str = '',
                      probs: int = 9010,
-                     QC_pass: bool = True) -> list:
+                     QC_pass: bool = True,
+                     ) -> list:
 
     '''
     Make list of sessions to include for designated mouse
@@ -43,15 +45,18 @@ def sessions_to_load(mouse: str,
 
     root = set_data_overview_path(root)
 
-    file_path = root / 'session_log_all_cohorts.csv'
+    if dataset == 'standard':
+        session_log = 'session_log_all_cohorts.csv'
+    elif dataset == 'dan':
+        session_log = 'session_log_dan.csv'
+
+    file_path = root / session_log
     ref_df = pd.read_csv(file_path)
     probs = str(probs) if not isinstance(probs, str) else probs
     ref_df = ref_df.query('Mouse == @mouse \
                           & Condition == @probs & Pass == @QC_pass')
-    dates_list = [session[4:] for session in ref_df.Session.values]
-    print(dates_list)
 
-    return dates_list
+    return ref_df.Date.values
 
 
 def get_max_trial(full_sessions: dict) -> int:
@@ -167,22 +172,25 @@ def read_multi_sessions(mouse: str,
                         root: str = '',
                         *,
                         prob_set: int = 9010,
-                        # fname_suffix: str = 'states_50Hz',
                         QC_pass: bool = True,
+                        dataset: str = None,
                         **dm_kwargs) -> dict:
 
     if not root:
         root = input('Please provide a path to the data:')
+    if dataset is None:
+        dataset = 'standard'
     root = Path(root)
     # define list of files to work through (by session and preprocessing date)
     dates_list = sessions_to_load(mouse, probs=prob_set, QC_pass=QC_pass,
-                                  root=root)
+                                  root=root, dataset=dataset)
     multi_sessions = {key: pd.DataFrame() for key in ['trials', 'ts']}
 
     # Loop through files to be processed
     for session_date in tqdm(dates_list, mouse, disable=False):
-
-        file_path = set_session_path(root, mouse=mouse, session=session_date)
+        print(session_date)
+        file_path = set_session_path(root, mouse=mouse, session=session_date,
+                                     dataset=dataset)
 
         ts_path = file_path / f'{mouse}_{session_date}_timeseries.parquet.gzip'
         trials_path = file_path / f'{mouse}_trials.csv'
@@ -198,7 +206,7 @@ def read_multi_sessions(mouse: str,
         # If no photometry channels passed QC, move on to next session.
         # ts = qc.QC_photometry_signal(ts, mouse, session_date)
         channels = {'z_grnL', 'z_grnR'}
-        sig_cols = {ch for ch in channels if not qc.is_normal(ts[ch])}
+        sig_cols = {ch for ch in channels if not qc.is_normal(ts.get(ch, None))}
         if not sig_cols:
             continue
         # Replace channels without signal with NaNs.
@@ -227,9 +235,16 @@ def read_multi_sessions(mouse: str,
 # Functions to set some data paths
 ###################################
 
-def set_session_path(root, *, mouse: str = '', session: str = ''):
+def set_session_path(root, dataset, *, mouse: str = '', session: str = ''):
 
-    full_path = root / 'headfixed_DAB_data/preprocessed_data' / mouse / session
+    if dataset == 'standard':
+        mid_path = root / 'headfixed_DAB_data/preprocessed_data'
+    elif dataset == 'dan':
+        mid_path = root / 'headfixed_DAB_data/Dan_data/preprocessed_data'
+    else:
+        raise NotImplementedError('No path to dataset provided')
+
+    full_path = mid_path / mouse / session
 
     return full_path
 
