@@ -7,6 +7,7 @@ Created on Mon Jan 17 15:22:38 2022
 """
 
 import configparser
+import os
 from functools import partial
 
 import matplotlib as mpl
@@ -18,7 +19,8 @@ import seaborn as sns
 from nta.events.align import get_lick_times
 
 
-def load_config_variables(section: str = 'color_palette') -> dict:
+def load_config_variables(path_to_file: str,
+                          section: str = 'color_palette') -> dict:
 
     '''
     Create dictionary containing parameter values that will be repeated
@@ -39,7 +41,7 @@ def load_config_variables(section: str = 'color_palette') -> dict:
     cpal = mpl.cm.RdBu_r(np.linspace(0, 1, 8))
 
     config_file = configparser.ConfigParser()
-    config_file.read("plot_config.ini")
+    config_file.read(os.path.join(path_to_file, 'plot_config.ini'))
 
     # Create dictionary with key:value for each config item
     config_variables = {}
@@ -278,6 +280,8 @@ def plotting_wrapper(trials: pd.DataFrame,
                      alignment_states: list = None,
                      channel: str = None,
                      window: tuple = (1, 2),
+                     save: bool = False,
+                     fname: str = None,
                      **kwargs):
 
     '''
@@ -301,6 +305,49 @@ def plotting_wrapper(trials: pd.DataFrame,
             Axes object containing created and filled plot.
     '''
 
+    def save_plot_metadata(fname, new_plot=True):
+
+        '''
+        Save text file with metadata to accompany plot file.
+        Args:
+            fname:
+                Filename of plot (with ext .png)
+            new_plot:
+                True if first subplot and text file needs to be intialized.
+        '''
+
+        sess_per_mouse = np.array(exploded_trials
+                                  .groupby("Mouse", as_index=False)["session"]
+                                  .nunique())
+
+        grp_on = (kwargs.get('column')
+                  if not kwargs.get('ls_col', False)
+                  else [kwargs.get('column'), kwargs.get('ls_col')])
+        trials_per_cond = np.array(exploded_trials
+                                   .groupby(grp_on, as_index=False)["nTrial"]
+                                   .nunique(), dtype='str')
+
+        metadata = [f'filename = {fname}',
+                    f'supblot = {event}',
+                    f'channel = {channel}',
+                    f'n_trials = {exploded_trials.nTrial.nunique()}',
+                    f'n_sessions = {exploded_trials.Session.nunique()}',
+                    f'mice = {exploded_trials.Mouse.unique()}',
+                    f'sessions/mouse = {sess_per_mouse}',
+                    f'conditions = {grp_on}',
+                    f'trials/condition = \n{trials_per_cond}',
+                    '\n',
+                    ]
+
+        metadata_fname = f'{fname[:-4]}_metadata.txt'
+        write_style = ('a' if (os.path.exists(metadata_fname) and not new_plot)
+                       else 'w')
+
+        with open(metadata_fname, write_style) as f:
+            for line in metadata:
+                f.write(line)
+                f.write('\n')
+
     axs = None
     fig = None
 
@@ -311,6 +358,8 @@ def plotting_wrapper(trials: pd.DataFrame,
     # Iteratively fill subplots with each event-alignd photometry trace.
     for plot_iter, event in enumerate(alignment_states, start=1):
         n_iters = [len(alignment_states), plot_iter - 1]
+
+        leg = kwargs.get('leg_override', plot_iter >= n_iters[0])
         photometry_column = f'{event}_{channel}'
         exploded_trials = (trials.copy()
                            .dropna(subset=[photometry_column])
@@ -321,11 +370,17 @@ def plotting_wrapper(trials: pd.DataFrame,
                                               align_event=event,
                                               y_col=photometry_column,
                                               n_iters=n_iters,
-                                              show_leg=plot_iter >= n_iters[0],
+                                              show_leg=leg,
                                               fig=fig,
                                               axs=axs,
                                               window=window,
                                               **kwargs)
+
+        if save:
+            save_plot_metadata(fname, new_plot=(plot_iter == 1))
+
+    if save:
+        fig.savefig(fname, dpi=200, bbox_inches='tight')
 
     return fig, axs
 
