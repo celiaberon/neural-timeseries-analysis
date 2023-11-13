@@ -332,7 +332,7 @@ def QC_photometry_signal(timeseries: pd.DataFrame,
     return ts_, y_cols_pass
 
 
-def is_normal(ts, include_score=False):
+def is_normal(ts, include_score=False, verbose=True, thresh_score=0):
 
     '''
     Test for normality as a measure of signal to noise. Result of normally
@@ -345,6 +345,10 @@ def is_normal(ts, include_score=False):
         include_score:
             Whether or not to include the number of metrics that passed as
             normally distributed.
+        thresh_score:
+            Threshold for permissable tests that return normality=True.
+            Default of 1 means any test returning normal dist is sufficient to
+            accept dist as normal (most conservative inclusion level).
 
     Returns:
         result:
@@ -355,18 +359,31 @@ def is_normal(ts, include_score=False):
             to 3).
     '''
 
-    skew = np.abs(ts.skew()) < 1
-    kurtosis = np.abs(ts.kurtosis()) < 1
+    if ts is None:  # needs to be a distribution to have signal
+        return True
+
+    skew = np.abs(ts.skew()) < 0.5
+    kurtosis = np.abs(ts.kurtosis()) < 0.8
 
     rand_normal = np.random.normal(0, np.nanstd(ts), len(ts))
     _, p_value = scipy.stats.ks_2samp(ts, rand_normal, alternative="two-sided")
 
     ks_test = p_value > 0.05
 
-    result = any((skew, kurtosis, ks_test))
+    score = sum((skew, kurtosis, ks_test))
+    # print(skew, kurtosis, ks_test)
+
+    result = score > thresh_score
 
     if include_score:
-        score = sum((skew, kurtosis, ks_test))
+        if verbose:
+            print(f'skew = {np.abs(ts.skew())}\n',
+                  f'kurtosis = {np.abs(ts.kurtosis())}\n',
+                  f'p_value = {p_value}')
         return result, score
     else:
+        if verbose:
+            print(f'skew = {np.abs(ts.skew())}\n',
+                  f'kurtosis = {np.abs(ts.kurtosis())}\n',
+                  f'p_value = {p_value}')
         return result
