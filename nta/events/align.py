@@ -227,6 +227,9 @@ def align_photometry_to_event(trials: pd.DataFrame,
                               .map(trials_w_data
                                    .set_index('nTrial')[times_col]))
 
+        if len(trials_.dropna(subset=photo_col)) == 0:
+            continue
+
         if quantify_peaks:
             trials_ = group_peak_metrics(trials_,
                                          grouping_levels=['Session'],
