@@ -17,6 +17,7 @@ import pandas as pd
 import seaborn as sns
 
 from nta.events.align import get_lick_times
+from nta.utils import save_plot_metadata
 
 
 def load_config_variables(path_to_file: str,
@@ -164,7 +165,7 @@ def config_plot_cpal(*, cmap_colors=None, **kwargs):
         case int():  # Sequential palette for numerical conditions
             cpal = mpl.cm.RdBu(np.linspace(0, 1, cmap_colors))
             cpal = mpl.colors.LinearSegmentedColormap.from_list('cpal', cpal)
-        case (str() | dict()):  # Use provided palette if given explicitly
+        case (str() | dict() | list()):  # Use palette if given explicitly
             cpal = cmap_colors
         case _:
             cpal = 'deep'
@@ -172,6 +173,7 @@ def config_plot_cpal(*, cmap_colors=None, **kwargs):
     return cpal
 
 
+@save_plot_metadata
 def plot_trial_type_comparison(ts: pd.DataFrame,
                                *,
                                column: str = None,
@@ -227,7 +229,11 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                                                'axes.titlesize': 11,
                                                'savefig.transparent': True,
                                                'legend.title_fontsize': 11,
-                                               'legend.fontsize': 10})
+                                               'legend.fontsize': 10,
+                                               'legend.borderpad': 0.2,
+                                               'figure.titlesize': 11,
+                                               'figure.subplot.wspace': 0.1,
+                                               })
 
     if n_iters is None:
         n_iters = [1, 0]
@@ -265,7 +271,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                             err_kws={'alpha': 0.3},
                             estimator=kwargs.get('estimator', 'mean'))
 
-    ax1 = config_plot(ax1, y_col, column, ts[y_col], **kwargs)
+    fig, ax1 = config_plot(ax1, fig, y_col, column, ts[y_col], **kwargs)
 
     # Plot distribution of behavioral/task events relative to alignment event.
     if behavior_hist:
@@ -279,9 +285,6 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
 def plotting_wrapper(trials: pd.DataFrame,
                      alignment_states: list = None,
                      channel: str = None,
-                     window: tuple = (1, 2),
-                     save: bool = False,
-                     fname: str = None,
                      **kwargs):
 
     '''
@@ -304,49 +307,6 @@ def plotting_wrapper(trials: pd.DataFrame,
         axs:
             Axes object containing created and filled plot.
     '''
-
-    def save_plot_metadata(fname, new_plot=True):
-
-        '''
-        Save text file with metadata to accompany plot file.
-        Args:
-            fname:
-                Filename of plot (with ext .png)
-            new_plot:
-                True if first subplot and text file needs to be intialized.
-        '''
-
-        sess_per_mouse = np.array(exploded_trials
-                                  .groupby("Mouse", as_index=False)["session"]
-                                  .nunique())
-
-        grp_on = (kwargs.get('column')
-                  if not kwargs.get('ls_col', False)
-                  else [kwargs.get('column'), kwargs.get('ls_col')])
-        trials_per_cond = np.array(exploded_trials
-                                   .groupby(grp_on, as_index=False)["nTrial"]
-                                   .nunique(), dtype='str')
-
-        metadata = [f'filename = {fname}',
-                    f'supblot = {event}',
-                    f'channel = {channel}',
-                    f'n_trials = {exploded_trials.nTrial.nunique()}',
-                    f'n_sessions = {exploded_trials.Session.nunique()}',
-                    f'mice = {exploded_trials.Mouse.unique()}',
-                    f'sessions/mouse = {sess_per_mouse}',
-                    f'conditions = {grp_on}',
-                    f'trials/condition = \n{trials_per_cond}',
-                    '\n',
-                    ]
-
-        metadata_fname = f'{fname[:-4]}_metadata.txt'
-        write_style = ('a' if (os.path.exists(metadata_fname) and not new_plot)
-                       else 'w')
-
-        with open(metadata_fname, write_style) as f:
-            for line in metadata:
-                f.write(line)
-                f.write('\n')
 
     axs = None
     fig = None
@@ -373,19 +333,16 @@ def plotting_wrapper(trials: pd.DataFrame,
                                               show_leg=leg,
                                               fig=fig,
                                               axs=axs,
-                                              window=window,
                                               **kwargs)
 
-        if save:
-            save_plot_metadata(fname, new_plot=(plot_iter == 1))
-
-    if save:
-        fig.savefig(fname, dpi=200, bbox_inches='tight')
+    if kwargs.get('save', False):
+        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
 
     return fig, axs
 
 
 def config_plot(ax,
+                fig,
                 y_col: str,
                 column: str,
                 ts_channel: pd.Series,
@@ -393,6 +350,7 @@ def config_plot(ax,
                 ylim: tuple = None,  # (-2, 3),
                 ls_col=False,
                 window: tuple = (1, 3),
+                title: str = None,
                 **kwargs):
 
     '''
@@ -410,18 +368,25 @@ def config_plot(ax,
     ax.axhline(y=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0)
     ax.set(xlabel='Time (s)', ylabel='z-score', ylim=ylim)
     ax.text(x=-0.05, y=ylim[1] + 0.1 * sum(ylim), s=align_event)
+    ax.set(xlim=(-window[0], window[1]))
     ticks = ax.get_xticks()
     ax.set_xticks([int(tick) for tick in ticks if tick.is_integer()])
     ax.set(xlim=(-window[0], window[1]))
 
+    if title:
+        fig.suptitle(title, y=0.9)
+
     if not show_leg:
         ax.legend().set_visible(False)
     else:
-        ax.legend(bbox_to_anchor=(1, 1), loc='upper left', frameon=False,
-                  title='' if ls_col else column)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend().set_visible(False)
+        fig.legend(handles, labels, bbox_to_anchor=(1, 0.9), loc='upper left',
+                   frameon=False, title='' if ls_col else column)
+
     sns.despine()
 
-    return ax
+    return fig, ax
 
 
 def label_legend_unique_handles(ax, **kwargs):

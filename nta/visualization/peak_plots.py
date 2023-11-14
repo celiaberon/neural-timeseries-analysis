@@ -11,13 +11,15 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from nta.utils import save_plot_metadata
+
 
 def initialize_peak_fig(states,
                         *,
                         figsize: tuple[int | float, int | float] = (3.5, 4.),
                         axes_style: str = None,
                         flatten_layout: bool = False,
-                        **kwargs):
+                        **mosaic_kwargs):
 
     sns.set(style='ticks',
             rc={'axes.labelsize': 12,
@@ -38,7 +40,7 @@ def initialize_peak_fig(states,
     if figsize == (3.5, 4.) and (states or flatten_layout):
         figsize = (2 * len(layout[0]), 2)
 
-    fig, ax = plt.subplot_mosaic(layout, figsize=figsize, **kwargs)
+    fig, ax = plt.subplot_mosaic(layout, figsize=figsize, **mosaic_kwargs)
 
     if states is None:
         ax['no reward'].set(title='Unrewarded',)
@@ -136,21 +138,26 @@ def exclude_outliers(peaks, x_col, y_col):
     return peaks_
 
 
+@save_plot_metadata
 def plot_peaks_wrapper(peaks: pd.DataFrame,
                        x_col: str = None,
                        channel: str = None,
                        metrics: str | dict[str, str] = 'mean',
                        plot_func=sns.boxplot,
                        show_outliers: bool = True,
-                       plot_func_kws=None,
+                       plot_func_kws: dict = None,
+                       mosaic_kws: dict = None,
                        ignore_reward: bool = False,
-                       states=None,
-                       **kwargs):
+                       states: list = None,
+                       save: bool = False,
+                       fname: str = ''):
 
     if plot_func_kws is None:
         plot_func_kws = {}
+    if mosaic_kws is None:
+        mosaic_kws = {}
 
-    fig, ax = initialize_peak_fig(states, **kwargs)
+    fig, ax = initialize_peak_fig(states, **mosaic_kws)
 
     # Set color palette to be passed as a keyword argument to plotting func.
     plot_func_kws['palette'] = set_color_palette(peaks,
@@ -158,7 +165,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
                                                  **plot_func_kws)
     if states is None:
         states = ['Consumption', 'Cue']
-    if type(metrics) == str:
+    if isinstance(metrics, str):
         metrics = {state: metrics for state in states}
         if not ignore_reward and 'Consumption' in states:
             metrics['no reward'] = metrics['Consumption']
@@ -191,6 +198,9 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
                           **plot_func_kws)
 
     ax = config_plot(ax, metrics)
+
+    if save:
+        ...
 
     return fig, ax
 
