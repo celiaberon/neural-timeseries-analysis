@@ -180,9 +180,15 @@ def align_photometry_to_event(trials: pd.DataFrame,
 
     # Ensure that our photometry timeseries has unbroken trial continuity.
     if ts_full.session.nunique() > 1:
-        assert ts_full.groupby('session').nTrial.diff().max() == 1
+        assert ts_full.groupby('session').nTrial.diff().max() == 1, (
+            'Found discontinuous trial IDs, cannot extract traces'
+        )
     else:
-        assert ts_full.nTrial.diff().max() == 1
+        assert ts_full.nTrial.diff().max() == 1, (
+            'Found discontinuous trial IDs, cannot extract traces'
+        )
+    assert ~any(ts_full.get('continuity_broken', [0])), (
+        'Continuity broken flag exists')
 
     if isinstance(channel, str):
         channel = [channel]
