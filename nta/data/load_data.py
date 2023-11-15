@@ -141,16 +141,20 @@ def read_multi_mice(mice: list[str],
     every trial id unique.
 
     Args:
-        mice (list of str)
-        pp_style (str):
-            'zscore', 'z_dFF', or 'dFF'
+        mice:
+            List of mice from which to load data.
+        root:
+            Path to root directory containing Mouse data folder.
 
     Returns:
         multi_mice (dict):
-            {'bdf': trials data, 'analog': timeseries data}
+            {'trials': trials data, 'timeseries': timeseries data}
     '''
     if not root:
         root = input('Please provide a path to the data:')
+
+    if not isinstance(mice, list):
+        mice = [mice]
 
     multi_mice = {key: pd.DataFrame() for key in ['trials', 'ts']}
 
@@ -188,25 +192,26 @@ def read_multi_sessions(mouse: str,
 
     # Loop through files to be processed
     for session_date in tqdm(dates_list, mouse, disable=False):
-        print(session_date)
+
         file_path = set_session_path(root, mouse=mouse, session=session_date,
                                      dataset=dataset)
 
         ts_path = file_path / f'{mouse}_{session_date}_timeseries.parquet.gzip'
         trials_path = file_path / f'{mouse}_trials.csv'
+
         if not (ts_path.exists() & trials_path.exists()):
             print(f'skipped {mouse} {session_date}')
             continue
+
         ts = pd.read_parquet(ts_path)
         trials = pd.read_csv(trials_path, index_col=0)
 
-        fs = ts.session_clock.diff().iloc[2].item()
-        trials, ts = add_behavior_cols(trials, ts, fs)
+        trials, ts = add_behavior_cols(trials, ts)
 
         # If no photometry channels passed QC, move on to next session.
-        # ts = qc.QC_photometry_signal(ts, mouse, session_date)
         channels = {'z_grnL', 'z_grnR'}
-        sig_cols = {ch for ch in channels if not qc.is_normal(ts.get(ch, None))}
+        sig_cols = {ch for ch in channels
+                    if not qc.is_normal(ts.get(ch, None))}
         if not sig_cols:
             continue
         # Replace channels without signal with NaNs.

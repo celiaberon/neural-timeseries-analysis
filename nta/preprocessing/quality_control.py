@@ -10,18 +10,19 @@ import numpy as np
 import pandas as pd
 import scipy
 
+from nta.features.select_trials import match_trial_ids
 from nta.preprocessing.signal_processing import snr_photo_signal
 
 
 def QC_included_trials(ts: pd.DataFrame,
                        trials: pd.DataFrame,
                        allow_discontinuity: bool = False,
-                       drop_enlP: bool = False,
-                       drop_timeouts: bool = False) -> dict:
+                       **kwargs) -> dict:
 
     '''
     Quality control within sessions to match timeseries and trial dataframes
-    -- remove high timeout blocks
+    starting and ending trial ID values. Also remove -- remove high timeout
+    blocks.
 
     Args:
         ts:
@@ -30,59 +31,39 @@ def QC_included_trials(ts: pd.DataFrame,
         trials:
             Trial data for single session.
         allow_discontinuity:
-            Whether or not continuous trial structure can be broken. If false,
-            only trials from beginning/end can be excluded.
-        drop_enlP:
-            Whether or not to exclude trials with ENL penalties.
-        drop_timeouts:
-            Whether or not to exclude trials with selection timeouts.
+            Whether or not continuous trial structure can be broken. If False,
+            only trials from beginning/end can be excluded. If False, also
+            permits mismatch in trial ids between min and max trial.
 
     Returns:
         trials_matched (dict):
             {'trials': trial data, 'ts': timeseries data}
             Contain only identical trial sets.
     '''
-    assert ts.session.dropna().nunique() == 1, 'multi-session not implemented'
-    assert trials.Session.dropna().nunique() == 1, 'multi-session not imp'
+
+    assert ts.session.dropna().nunique() == 1, (
+        'multi-session not implemented')
+    assert trials.Session.dropna().nunique() == 1, (
+        'multi-session not implemented')
 
     trials_ = trials.copy()
     ts_ = ts.copy()
 
-    flagged_trials = trials_.query('flag_block == 1').nTrial.values
+    # flag only blocks that don't disrupt photometry timeseries
+    min_trial = trials_.query('~flag_block').nTrial.min()
+    max_trial = trials_.query('~flag_block').nTrial.max()
+    flagged_blocks = (trials_
+                      .query('~nTrial.between(@min_trial, @max_trial)')
+                      .nTrial.dropna().values)
 
-    if allow_discontinuity:
-        # flagged_trials stays as is
-        if drop_enlP:  # take only trials without enl penalty
-            ntrials = len(trials_)
-            trials_ = trials_.query('n_ENL == 1')
-            print(ntrials - len(trials_), 'penalty trials dropped')
+    trials_ = trials_.loc[~trials_.nTrial.isin(flagged_blocks)]
 
-        if drop_timeouts:  # take only trials with choice lick
-            ntrials = len(trials_)
-            trials_ = trials_.query('~timeout')
-            print(ntrials - len(trials_), 'timeout trials dropped')
+    # Match min and max trial IDs only (can differ internally but offset will)
+    # be consistent.
+    trials_, ts_ = match_trial_ids(trials_, ts_,
+                                   allow_discontinuity=allow_discontinuity)
 
-    else:
-        # flag only blocks that don't disrupt photometry timeseries
-        min_trial = trials_.query('~flag_block').nTrial.min()
-        max_trial = trials_.query('~flag_block').nTrial.max()
-        flagged_blocks = (trials_
-                          .query('~nTrial.between(@min_trial, @max_trial)')
-                          .nTrial.dropna().values)
-        ex_trials = list(set(flagged_trials).union(set(flagged_blocks)))
-
-    trials_ = trials_.loc[~trials_.nTrial.isin(ex_trials)]
-
-    # these blocks occur too infrequently -- less than 10 sessions
-    trials_ = trials_.query('iBlock <= 16')
-
-    included_trials = (set(ts_.nTrial.astype('int').values)
-                       .intersection(trials_.nTrial.values))
-    # take only specified trials to match both dfs
-    ts_QC = ts_.loc[ts_.nTrial.isin(included_trials)]
-    trials_QC = trials_.loc[trials_.nTrial.isin(included_trials)]
-
-    return {'trials': trials_QC, 'ts': ts_QC}
+    return {'trials': trials_, 'ts': ts_}
 
 
 def QC_enl_penalty_rate(trials: pd.DataFrame) -> list:
@@ -332,7 +313,7 @@ def QC_photometry_signal(timeseries: pd.DataFrame,
     return ts_, y_cols_pass
 
 
-def is_normal(ts, include_score=False, verbose=True, thresh_score=0):
+def is_normal(ts, include_score=False, verbose=False, thresh_score=0):
 
     '''
     Test for normality as a measure of signal to noise. Result of normally
