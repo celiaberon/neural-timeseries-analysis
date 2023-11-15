@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from pandas.api.types import is_numeric_dtype
 
 from nta.events.align import get_lick_times
 from nta.utils import save_plot_metadata
@@ -157,20 +158,29 @@ def subsample_trial_types(trials: pd.DataFrame,
     return subsampled_trials
 
 
-def config_plot_cpal(*, cmap_colors=None, **kwargs):
+def config_plot_cpal(ts, column, *, cmap_colors=None, **kwargs):
 
     '''Set color palette with flexible input'''
 
     match cmap_colors:
         case int():  # Sequential palette for numerical conditions
             cpal = mpl.cm.RdBu(np.linspace(0, 1, cmap_colors))
-            cpal = mpl.colors.LinearSegmentedColormap.from_list('cpal', cpal)
+            cpal = mpl.colors.LinearSegmentedColormap.from_list('cpal', cpal,
+                                                                N=cmap_colors)
+            cpal = [cpal(i) for i in range(cmap_colors)]
         case (str() | dict() | list()):  # Use palette if given explicitly
             cpal = cmap_colors
         case _:
             cpal = 'deep'
 
-    return cpal
+    if not isinstance(cpal, dict):
+        labels = np.sort(ts[column].dropna().unique())
+        if any(labels < 0) & any(labels > 0) & ~any(labels == 0):
+            labels = np.sort(np.insert(labels, 0, 0))
+        cpal = {label: color for label, color in zip(labels, cpal)}
+    kwargs.update({'cpal': cpal})
+
+    return cpal, kwargs
 
 
 @save_plot_metadata
@@ -239,7 +249,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
         n_iters = [1, 0]
 
     # Plot aesthetics and designate current ax1: lineplot, ax2: behavior.
-    cpal = config_plot_cpal(**kwargs)
+    cpal, kwargs = config_plot_cpal(ts, column, **kwargs)
     if n_iters[1] == 0:
         fig, axs = set_new_axes(n_iters=n_iters,
                                 behavior_hist=behavior_hist,
@@ -271,7 +281,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                             err_kws={'alpha': 0.3},
                             estimator=kwargs.get('estimator', 'mean'))
 
-    fig, ax1 = config_plot(ax1, fig, y_col, column, ts[y_col], **kwargs)
+    fig, ax1 = config_plot(ax1, fig, ts, y_col, column, **kwargs)
 
     # Plot distribution of behavioral/task events relative to alignment event.
     if behavior_hist:
@@ -343,11 +353,11 @@ def plotting_wrapper(trials: pd.DataFrame,
 
 def config_plot(ax,
                 fig,
+                ts: pd.DataFrame,
                 y_col: str,
                 column: str,
-                ts_channel: pd.Series,
                 show_leg: bool = False,
-                ylim: tuple = None,  # (-2, 3),
+                ylim: tuple = None,
                 ls_col=False,
                 window: tuple = (1, 3),
                 title: str = None,
@@ -358,6 +368,7 @@ def config_plot(ax,
     and setting limits/legends/tick labels consistently.
     '''
 
+    ts_channel = ts[column]
     align_event = y_col.split('_')[0]
     if ylim is None:
         ymin = np.mean(ts_channel) - 0.8 * np.abs(np.min(ts_channel))
@@ -379,10 +390,16 @@ def config_plot(ax,
     if not show_leg:
         ax.legend().set_visible(False)
     else:
-        handles, labels = ax.get_legend_handles_labels()
-        ax.legend().set_visible(False)
-        fig.legend(handles, labels, bbox_to_anchor=(1, 0.9), loc='upper left',
-                   frameon=False, title='' if ls_col else column)
+        # Replace legend with colorbar if conditioning on numeric variable
+        # that contains more than two conditions.
+        if is_numeric_dtype(ts[column]) & (ts[column].dropna().nunique() > 2):
+            fig, ax = convert_leg_to_cbar(fig, ax, **kwargs)
+        else:
+            handles, labels = ax.get_legend_handles_labels()
+            ax.legend().set_visible(False)
+            fig.legend(handles, labels, bbox_to_anchor=(1, 0.9),
+                       loc='upper left', frameon=False,
+                       title='' if ls_col else column)
 
     sns.despine()
 
@@ -396,6 +413,69 @@ def label_legend_unique_handles(ax, **kwargs):
     ax.legend(legend_reduced.values(), legend_reduced.keys(),
               bbox_to_anchor=(1, 1), frameon=False, **kwargs)
     return ax
+
+
+def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, **kwargs):
+
+    '''
+    Create colorbar to replace legend. Should be called for sequential,
+    numeric labels only.
+
+    Args:
+        fig, ax:
+            Matplotlib figure and axis (current axis) objects.
+        labels:
+            Colormap labels that will be used to label colorbar.
+        cpal:
+            Color palette containing at least color values, but ideally
+            pre-connected to color labels.
+    Returns:
+        fig, ax:
+            Figure and axis objects with added colorbar and removed legend.
+    '''
+
+    hw = len(cpal) // 2
+
+    if labels is None:
+        labels = np.array(list(cpal.keys()))
+        print(labels)
+        print(len(list(cpal.values())))
+    skip_zero = False
+    if any(labels > 0) & any(labels < 0):
+        # skip_zero = True
+        cm_min, cm_max = (-hw - 1, hw + 1)
+    else:
+        cm_min, cm_max = (0, len(cpal) + 1 + skip_zero)
+
+    i_color = range(cm_min, cm_max)
+    color_vals = np.array(list(cpal.values()))
+    cmap, norm = mpl.colors.from_levels_and_colors(i_color, color_vals)
+    sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+
+    h, lab = ax.get_legend_handles_labels()
+    ax.legend().set_visible(False)
+
+    # Add cbar to figure to avoid resizing subplots to accomodate.
+    fig.add_subplot(111, frameon=False)
+    plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
+                    left=False, right=False)
+    cbar = plt.colorbar(sm, anchor=(1.5, 0), shrink=0.6)
+    cbar.ax.tick_params(size=0)
+    if len(labels) <= 7:
+        cbar.set_ticks(np.arange(cm_min + 0.5, cm_max - 0.5 + skip_zero),
+                       labels=[int(label) for label in labels])
+    else:
+        cbar.set_ticks([cm_min + 0.5, cm_max - 1.5],
+                       labels=[labels[0], labels[-1]])
+
+    if 'Rewarded' in lab:
+        plt.legend(*list(zip(*[(h_, l_) for h_, l_ in zip(h, lab)
+                               if l_ in ['Rewarded', 'Unrewarded']])),
+                   bbox_to_anchor=(1.5, 1), markerscale=1., fontsize=13,
+                   edgecolor='white')
+
+    return fig, ax
 
 
 def behavior_event_distributions(ts,
