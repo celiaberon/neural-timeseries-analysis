@@ -283,7 +283,7 @@ def label_lick_position(timeseries: pd.DataFrame):
 
 def add_behavior_cols(trials: pd.DataFrame,
                       timeseries: pd.DataFrame,
-                      fs: int = 50) -> tuple:
+                      fs: int = None) -> tuple:
 
     '''
     Add columns defining behavior features to trial data.
@@ -314,6 +314,9 @@ def add_behavior_cols(trials: pd.DataFrame,
 
     assert trials_.Session.dropna().nunique() == 1  # because of row shifting
 
+    if 'Mouse' not in ts_.columns:
+        ts_['Mouse'] = [sess[:3] for sess in ts_.session.values]
+
     trials_['enlp_trial'] = trials_['n_ENL'] > 1
     trials_ = get_reward_seq(trials_)  # number cumulative rewarded and losses
     trials_ = shift_trial_feature(trials_, col='outcome_seq', n_shift=1,
@@ -334,7 +337,8 @@ def add_behavior_cols(trials: pd.DataFrame,
         trials_ = convert_to_AB_sequence(trials_, sequence_length=h_length)
 
     # Some additional columns that can be useful.
-    # ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
+    if 'session_clock' not in ts_.columns:
+        ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
     trials_['nLicks'] = count_consumption_licks(ts_, trials_)
     ts_['iLick'] = label_lick_position(ts_)
 

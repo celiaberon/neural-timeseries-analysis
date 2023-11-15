@@ -438,14 +438,11 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, **kwargs):
 
     if labels is None:
         labels = np.array(list(cpal.keys()))
-        print(labels)
-        print(len(list(cpal.values())))
-    skip_zero = False
+
     if any(labels > 0) & any(labels < 0):
-        # skip_zero = True
         cm_min, cm_max = (-hw - 1, hw + 1)
     else:
-        cm_min, cm_max = (0, len(cpal) + 1 + skip_zero)
+        cm_min, cm_max = (0, len(cpal) + 1)
 
     i_color = range(cm_min, cm_max)
     color_vals = np.array(list(cpal.values()))
@@ -460,10 +457,10 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, **kwargs):
     fig.add_subplot(111, frameon=False)
     plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
                     left=False, right=False)
-    cbar = plt.colorbar(sm, anchor=(1.5, 0), shrink=0.6)
+    cbar = plt.colorbar(sm, anchor=(1.3, 0), shrink=0.6)
     cbar.ax.tick_params(size=0)
     if len(labels) <= 7:
-        cbar.set_ticks(np.arange(cm_min + 0.5, cm_max - 0.5 + skip_zero),
+        cbar.set_ticks(np.arange(cm_min + 0.5, cm_max - 0.5),
                        labels=[int(label) for label in labels])
     else:
         cbar.set_ticks([cm_min + 0.5, cm_max - 1.5],
