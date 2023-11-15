@@ -21,7 +21,7 @@ def repeat_and_store(num_reps):
     def decorator_repeat(func):
         @functools.wraps(func)
         def wrapper_repeat(*args, **kwargs):
-            multi_output=[]
+            multi_output = []
             for rep in range(num_reps):
                 single_output = func(seed=rep, *args, **kwargs)
                 multi_output.append(single_output)
@@ -83,6 +83,11 @@ def write_metadata_lineplots(*args, **kwargs):
                 '\n',
                 ]
 
+    if new_plot & ('continuity_broken' in exploded_trials.columns):
+        metadata.insert(0, '\n')
+        metadata.insert(0, 'prep_data_params ='
+                        f'{kwargs.get("prep_data_params", "DEFAULT")}')
+
     # Create new metadata text file or append to existing file for each
     # subplot.
     metadata_fname = f'{fname[:-4]}_metadata.txt'
@@ -122,6 +127,11 @@ def write_metadata_peak_plots(*args, **kwargs):
                 f'trials/condition = \n{trials_per_cond}',
                 '\n',
                 ]
+
+    if 'continuity_broken' in peaks.columns:
+        metadata.insert(0, '\n')
+        metadata.insert(0, 'prep_data_params ='
+                        f'{kwargs.get("prep_data_params", "DEFAULT")}')
 
     # Create new metadata text file and insert info.
     metadata_fname = f'{fname[:-4]}_metadata.txt'

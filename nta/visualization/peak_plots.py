@@ -149,8 +149,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
                        mosaic_kws: dict = None,
                        ignore_reward: bool = False,
                        states: list = None,
-                       save: bool = False,
-                       fname: str = ''):
+                       **kwargs):
 
     if plot_func_kws is None:
         plot_func_kws = {}
@@ -199,7 +198,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 
     ax = config_plot(ax, metrics)
 
-    if save:
+    if kwargs.get('save'):
         ...
 
     return fig, ax
