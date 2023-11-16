@@ -124,6 +124,7 @@ def scatter_behavior_events(trials: pd.DataFrame,
         ax:
             Updated axis object containing scatterplot of event times.
     '''
+
     if fs is None:
         # Calculate sampling frequency on one sample trial.
         tstep, fs = get_sampling_freq(trials[f'{align_event}_times'].iloc[0])
@@ -154,19 +155,17 @@ def scatter_behavior_events(trials: pd.DataFrame,
         event_times = (trials[task_event].values + window[0]) / tstep
         basic_scatterplot(x=event_times,
                           color=color_dict[label],
-                          label=label
                           )
-
     # Scatterplot for align_event as x=0 for each trial.
     align_event_label = [k for k in color_dict if align_event.lower() in k][0]
     basic_scatterplot(x=window[0] / tstep,
                       color=color_dict[align_event_label],
-                      label=align_event_label
                       )
 
+    labels.append(align_event_label)
     ax.legend().remove()
 
-    return ax
+    return ax, labels
 
 
 def label_trial_types(ax,
@@ -519,20 +518,22 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
         tstep, fs = get_sampling_freq(timestamps)
 
         # Overlay scatterplot of behavior events for each trial's timeseries.
-        ax = scatter_behavior_events(trials_, ax, state, win, fs=fs)
+        ax, scatter_labels = scatter_behavior_events(trials_, ax, state, win,
+                                                     fs=fs)
 
     # Rescale colorbar to fit plot.
     fig, axs = create_scaled_colorbar(fig, axs, vmin, vmax)
 
     # Edit legend to give white points a black border (but not in plot itself).
-    h, labels = axs[-1].get_legend_handles_labels()
-    h[labels.index('selection lick')].set_edgecolor('k')
-    real_legend_items = [(h_, l_) for h_, l_ in zip(h, labels) if len(l_) > 2]
+    h, _ = axs[-1].get_legend_handles_labels()
+    h[scatter_labels.index('selection lick')].set_markeredgecolor('k')
+    real_legend_items = [(h_, l_) for h_, l_ in zip(h, scatter_labels)
+                         if len(l_) > 2]
     axs[-1].legend(*list(zip(*real_legend_items)),
                    bbox_to_anchor=(1, 1),
                    markerscale=2.,
                    edgecolor='white')
-    h[labels.index('selection lick')].set_edgecolor('white')
+    h[scatter_labels.index('selection lick')].set_markeredgecolor('white')
 
     plt.tight_layout()
 
