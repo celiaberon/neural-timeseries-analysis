@@ -128,7 +128,7 @@ def get_sampling_freq(timestamps):
               .round(6))
     tsteps_consistency = (tsteps
                           .value_counts(normalize=True)
-                          .max() > 0.99)
+                          .max())
 
     assert tsteps_consistency > 0.99, 'multiple sampling rates detected'
 
@@ -441,6 +441,8 @@ def trials_by_time_array(trials: pd.DataFrame,
     trials_clean = (trials.copy()
                           .dropna(subset=all_photo_cols)
                           .reset_index(drop=True))
+
+    assert len(trials_clean) > 0, (f'No data for {photo_col}')
 
     # Stack event-aligned timeseries into array: timepoints x trials.
     exploded_trials = trials_clean.explode(column=[photo_col, time_col])
