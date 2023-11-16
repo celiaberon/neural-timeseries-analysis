@@ -47,6 +47,9 @@ def save_plot_metadata(func):
         elif func.__name__ == 'plot_peaks_wrapper':
             write_metadata_peak_plots(*args, **kwargs)
 
+        elif func.__name__ == 'multiclass_roc_curves':
+            write_metadata_roc(*args, **kwargs)
+
         return func(*args, **kwargs)
 
     return inner
@@ -129,6 +132,49 @@ def write_metadata_peak_plots(*args, **kwargs):
                 ]
 
     if 'continuity_broken' in peaks.columns:
+        metadata.insert(0, '\n')
+        metadata.insert(0, 'prep_data_params ='
+                        f'{kwargs.get("prep_data_params", "DEFAULT")}')
+
+    # Create new metadata text file and insert info.
+    metadata_fname = f'{fname[:-4]}_metadata.txt'
+    with open(metadata_fname, 'w') as f:
+        for line in metadata:
+            f.write(line)
+            f.write('\n')
+
+
+def write_metadata_roc(*args, **kwargs):
+
+    fname = kwargs.get('fname')
+    trials = kwargs.get('trials').copy()
+
+    # Number of sessions per mouse.
+    sess_per_mouse = np.array(trials
+                              .groupby("Mouse", as_index=False)["session"]
+                              .nunique())
+
+    # Number of trials per condition (trace) in plot.
+    grp_on = [kwargs.get('trial_type', 'Reward'), kwargs.get('pred_behavior')]
+    trials_per_cond = np.array(trials
+                               .groupby(grp_on, as_index=False)["nTrial"]
+                               .nunique(), dtype='str')
+
+    metadata = [f'filename = {fname}',
+                f'neural_event = {kwargs.get("neural_event")}',
+                f'predicted_behavior = {kwargs.get("pred_behavior")}',
+                f'conditioned_event = {kwargs.get("trial_type", "Reward")}',
+                f'n_samples_per_rep = {kwargs.get("n_samples")}',
+                f'n_trials = {trials.nTrial.nunique()}',
+                f'n_sessions = {trials.Session.nunique()}',
+                f'mice = {trials.Mouse.unique()}',
+                f'sessions/mouse = {sess_per_mouse}',
+                f'conditions = {grp_on}',
+                f'trials/condition = \n{trials_per_cond}',
+                '\n',
+                ]
+
+    if 'continuity_broken' in trials.columns:
         metadata.insert(0, '\n')
         metadata.insert(0, 'prep_data_params ='
                         f'{kwargs.get("prep_data_params", "DEFAULT")}')

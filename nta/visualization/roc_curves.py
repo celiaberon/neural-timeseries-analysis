@@ -5,7 +5,7 @@ import seaborn as sns
 from sklearn import metrics
 
 from nta.features.select_trials import resample_and_balance
-from nta.utils import repeat_and_store
+from nta.utils import repeat_and_store, save_plot_metadata
 
 sns.set(style='ticks',
         rc={'axes.labelsize': 12, 'axes.titlesize': 12,
@@ -83,7 +83,7 @@ def calc_dprime_sample(*,
                                          **kwargs)
 
     # Store distribution of neural events within each class of pred_behavior.
-    neural_dists_by_class = np.zeros((2, len(balanced_data)//2))
+    neural_dists_by_class = np.zeros((2, len(balanced_data) // 2))
     for i, grp in balanced_data.groupby(pred_behavior):
         neural_dists_by_class[i, :] = grp[neural_event].values
 
@@ -205,13 +205,13 @@ def plot_roc_with_auc(fpr: np.array,
     ax.plot(fpr, mean_tpr, label=label, lw=0.6, color=color)
 
     # Shading representing SEM from boostrapped mean for TPR.
-    ax.fill_between(fpr, y1=mean_tpr+sem_tpr, y2=mean_tpr-sem_tpr, alpha=0.5,
-                    color=color)
+    ax.fill_between(fpr, y1=mean_tpr + sem_tpr, y2=mean_tpr - sem_tpr,
+                    alpha=0.5, color=color)
 
     if plot_auc:
         AUC = metrics.auc(x=fpr, y=mean_tpr)
         custom_label = f'{label}={round(AUC, 2)}'
-        ax.text(x=0.5, y=0.1+text_offset, s=custom_label, color=color,
+        ax.text(x=0.5, y=0.1 + text_offset, s=custom_label, color=color,
                 size=12)
 
     ax.plot([0, 1], [0, 1], color='k', ls='--', lw=0.5)
@@ -226,6 +226,7 @@ def plot_roc_with_auc(fpr: np.array,
     return ax
 
 
+@save_plot_metadata
 def multiclass_roc_curves(trials: pd.DataFrame,
                           neural_event: str = 'Consumption_grnL_mean',
                           pred_behavior: str = '',
@@ -257,9 +258,14 @@ def multiclass_roc_curves(trials: pd.DataFrame,
     ax = None
     for i, (key, grp) in enumerate(trials.groupby(trial_type, dropna=True)):
 
+        if isinstance(neural_event, dict):
+            ne = neural_event.get(key)
+        else:
+            ne = neural_event
+
         # Bootstrap (FPR, TPR) for each trial type defined by trial_type.
         bootstrapped_rocs = calc_roc_sample(trials=grp,
-                                            neural_event=neural_event,
+                                            neural_event=ne,
                                             pred_behavior=pred_behavior,
                                             **kwargs)
         # Unpack bootstrapped arrays into their respective lists.
@@ -269,12 +275,16 @@ def multiclass_roc_curves(trials: pd.DataFrame,
         # All FPRs across samples are identical, so onkly need single array.
         fpr = bootstrapped_rocs[0][0]
 
-        text_offset = i * (1/6)
+        text_offset = i * (1 / 6)
         ax = plot_roc_with_auc(fpr, tprs, label=key, ax=ax,
                                text_offset=text_offset, **kwargs)
 
     sns.despine()
     plt.tight_layout()
     plt.legend(bbox_to_anchor=(1, 1), loc='upper left', title=trial_type)
+
+    if kwargs.get('save', False):
+        fig = plt.gcf()
+        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
 
     return ax
