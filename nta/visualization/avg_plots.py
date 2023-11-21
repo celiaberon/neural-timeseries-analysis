@@ -6,8 +6,7 @@ Created on Mon Jan 17 15:22:38 2022
 @author: celiaberon
 """
 
-import configparser
-import os
+# import os
 from functools import partial
 
 import matplotlib as mpl
@@ -19,38 +18,6 @@ from pandas.api.types import is_numeric_dtype
 
 from nta.events.align import get_lick_times
 from nta.utils import save_plot_metadata
-
-
-def load_config_variables(path_to_file: str,
-                          section: str = 'color_palette') -> dict:
-
-    '''
-    Create dictionary containing parameter values that will be repeated
-    across notebooks
-
-    Args:
-        section:
-           Section name within configuration file.
-
-    Returns:
-        config_variables:
-            Dictionary containing variables and assigned values from config
-            file.
-    '''
-
-    # For color palette configuration only
-    import matplotlib as mpl
-    cpal = mpl.cm.RdBu_r(np.linspace(0, 1, 8))
-
-    config_file = configparser.ConfigParser()
-    config_file.read(os.path.join(path_to_file, 'plot_config.ini'))
-
-    # Create dictionary with key:value for each config item
-    config_variables = {}
-    for key in config_file[section]:
-        config_variables[key] = eval(config_file[section][key])
-
-    return config_variables
 
 
 def set_new_axes(n_iters: list,
