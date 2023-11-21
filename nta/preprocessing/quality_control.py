@@ -313,7 +313,8 @@ def QC_photometry_signal(timeseries: pd.DataFrame,
     return ts_, y_cols_pass
 
 
-def is_normal(ts, include_score=False, verbose=False, thresh_score=0):
+def is_normal(ts, include_score=False, verbose=False, thresh_score=0,
+              sensor='grabda_vls'):
 
     '''
     Test for normality as a measure of signal to noise. Result of normally
@@ -343,8 +344,13 @@ def is_normal(ts, include_score=False, verbose=False, thresh_score=0):
     if ts is None:  # needs to be a distribution to have signal
         return True
 
-    skew = np.abs(ts.skew()) < 0.5
-    kurtosis = np.abs(ts.kurtosis()) < 0.8
+    thresholds = {'grabda_vls': (0.5, 0.8),
+                  'grabda_dms': (0.1, 0.2)}
+
+    skew_thresh, kurt_thresh = thresholds.get(sensor)
+
+    skew = np.abs(ts.skew()) < skew_thresh
+    kurtosis = np.abs(ts.kurtosis()) < kurt_thresh
 
     rand_normal = np.random.normal(0, np.nanstd(ts), len(ts))
     _, p_value = scipy.stats.ks_2samp(ts, rand_normal, alternative="two-sided")
