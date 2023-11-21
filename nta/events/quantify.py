@@ -173,7 +173,7 @@ def group_peak_metrics(trials: pd.DataFrame,
         # Convert to longform timeseries and drop NaNs from grouping columns.
         exp_trials = (trials_
                       .explode(column=[channel_col, times_col])
-                      .dropna(subset=grouping_levels + ['Reward']))
+                      .dropna(subset=grouping_levels + ['Reward', channel_col]))
         exp_trials = create_combo_col(exp_trials, grouping_levels)
 
         # Iterate over each unique condition.
