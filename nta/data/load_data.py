@@ -13,6 +13,7 @@ from tqdm import tqdm
 import nta.preprocessing.quality_control as qc
 from nta.features.behavior_features import add_behavior_cols
 from nta.features.design_mat import make_design_mat
+from nta.utils import load_config_variables
 
 
 def sessions_to_load(mouse: str,
@@ -53,10 +54,13 @@ def sessions_to_load(mouse: str,
     file_path = root / session_log
     ref_df = pd.read_csv(file_path)
     probs = str(probs) if not isinstance(probs, str) else probs
-    ref_df = ref_df.query('Mouse == @mouse \
-                          & Condition == @probs & Pass == @QC_pass')
-
-    return ref_df.Date.values
+    if dataset == 'standard':
+        ref_df = ref_df.query('Mouse == @mouse \
+                              & Condition == @probs & Pass == @QC_pass')
+    elif dataset == 'dan':
+        ref_df = ref_df.query('Mouse == @mouse \
+                              & Condition == @probs & trt_grp=="WT"')
+    return list(set(ref_df.Date.values))
 
 
 def get_max_trial(full_sessions: dict) -> int:
@@ -178,6 +182,7 @@ def read_multi_sessions(mouse: str,
                         prob_set: int = 9010,
                         QC_pass: bool = True,
                         dataset: str = None,
+                        qc_photo: bool = True,
                         **dm_kwargs) -> dict:
 
     if not root:
@@ -185,6 +190,7 @@ def read_multi_sessions(mouse: str,
     if dataset is None:
         dataset = 'standard'
     root = Path(root)
+    cohort = load_cohort_dict(root, dataset)
     # define list of files to work through (by session and preprocessing date)
     dates_list = sessions_to_load(mouse, probs=prob_set, QC_pass=QC_pass,
                                   root=root, dataset=dataset)
@@ -210,8 +216,12 @@ def read_multi_sessions(mouse: str,
 
         # If no photometry channels passed QC, move on to next session.
         channels = {'z_grnL', 'z_grnR'}
-        sig_cols = {ch for ch in channels
-                    if not qc.is_normal(ts.get(ch, None))}
+        if qc_photo:
+            sig_cols = {ch for ch in channels
+                        if not qc.is_normal(ts.get(ch, None),
+                                            sensor=cohort.get(mouse))}
+        else:
+            sig_cols = channels
         if not sig_cols:
             continue
         # Replace channels without signal with NaNs.
@@ -259,3 +269,14 @@ def set_data_overview_path(root):
     full_path = root / 'data_overviews'
 
     return full_path
+
+
+def load_cohort_dict(root, dataset):
+
+    if dataset == 'standard':
+        full_path = root / 'headfixed_DAB_data/preprocessed_data/'
+        cohort = load_config_variables(full_path, 'cohort')['cohort']
+    else:
+        raise NotImplementedError
+
+    return cohort
