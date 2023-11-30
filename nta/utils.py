@@ -3,6 +3,7 @@ import functools
 import os
 
 import numpy as np
+import seaborn as sns
 
 
 def load_config_variables(path_to_file: str,
