@@ -256,6 +256,8 @@ def set_session_path(root, dataset, *, mouse: str = '', session: str = ''):
         mid_path = root / 'headfixed_DAB_data/preprocessed_data'
     elif dataset == 'dan':
         mid_path = root / 'headfixed_DAB_data/Dan_data/preprocessed_data'
+    elif dataset == 'colab':
+        mid_path = root
     else:
         raise NotImplementedError('No path to dataset provided')
 
@@ -273,7 +275,7 @@ def set_data_overview_path(root):
 
 def load_cohort_dict(root, dataset):
 
-    if dataset == 'standard':
+    if dataset in ['standard', 'colab']:
         full_path = root / 'headfixed_DAB_data/preprocessed_data/'
         cohort = load_config_variables(full_path, 'cohort')['cohort']
     else:
