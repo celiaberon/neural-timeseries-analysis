@@ -46,7 +46,7 @@ def sessions_to_load(mouse: str,
 
     root = set_data_overview_path(root)
 
-    if dataset == 'standard':
+    if dataset in ['standard', 'colab']:
         session_log = 'session_log_all_cohorts.csv'
     elif dataset == 'dan':
         session_log = 'session_log_dan.csv'
@@ -54,7 +54,7 @@ def sessions_to_load(mouse: str,
     file_path = root / session_log
     ref_df = pd.read_csv(file_path)
     probs = str(probs) if not isinstance(probs, str) else probs
-    if dataset == 'standard':
+    if dataset in ['standard', 'colab']:
         ref_df = ref_df.query('Mouse == @mouse \
                               & Condition == @probs & Pass == @QC_pass')
     elif dataset == 'dan':
