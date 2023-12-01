@@ -27,6 +27,9 @@ def load_config_variables(path_to_file: str,
     import matplotlib as mpl
     cpal = mpl.cm.RdBu_r(np.linspace(0, 1, 8))
 
+    if not os.path.file(os.path.join(path_to_file, 'plot_config.ini')):
+        path_to_file = os.getcwd()
+
     config_file = configparser.ConfigParser()
     config_file.read(os.path.join(path_to_file, 'plot_config.ini'))
 

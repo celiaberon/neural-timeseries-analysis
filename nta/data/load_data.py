@@ -275,9 +275,8 @@ def set_data_overview_path(root):
 
 def load_cohort_dict(root, dataset):
 
-    import os
     if dataset in ['standard', 'colab']:
-        cohort = load_config_variables(os.getcwd(), 'cohort')['cohort']
+        cohort = load_config_variables(root, 'cohort')['cohort']
     else:
         raise NotImplementedError
 
