@@ -357,7 +357,7 @@ def make_design_mat(timeseries: pd.DataFrame,
     hm_columns = add_heatmap_columns(ts_, trials)
 
     # Make column with 1s where licks occurred.
-    ts_['Lick'] = ts_.iSpout.notna().astype('int8')
+    ts_['Lick'] = ts_.iSpout.ne(0).astype('int8')
 
     # Create binary column for each state-defined lick class.
     ts_, lick_cols = classify_lick_state(ts_, states | tmp_lick_states)
@@ -380,7 +380,7 @@ def make_design_mat(timeseries: pd.DataFrame,
         dm['t_to_enlp_on'] = ts_['t_to_state_enlp_on'].copy()
 
     # Split licks by nth position in bout (as dummies).
-    dm = pull_lick_from_bout(dm, nth_licks, only_nth_lick=True)
+    dm = pull_lick_from_bout(dm, nth_licks, only_nth_lick=False)
 
     if interactions is not None:
         # 'flag' column for any NaNs in trial type (including timeouts).
@@ -410,7 +410,7 @@ def make_design_mat(timeseries: pd.DataFrame,
     if 'Cue' not in states:
         cols_to_drop.append('cue')
     if 'ENL' not in states:
-        cols_to_drop.append('t_from_enl_on')
+        cols_to_drop.append('t_to_enl_on')
     if tmp_lick_states:
         cols_to_drop.extend([col for col in dm.columns if 'con' in col])
     dm = dm.drop(columns=cols_to_drop)
