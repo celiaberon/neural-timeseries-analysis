@@ -301,7 +301,8 @@ def make_design_mat(timeseries: pd.DataFrame,
                     states: set[str] = None,
                     nth_licks: list[int] = None,
                     interactions: dict[str, str] = None,
-                    feature_comparison: bool = False) -> pd.DataFrame:
+                    feature_comparison: bool = False,
+                    **kwargs) -> pd.DataFrame:
 
     '''
     Wrapper to generate design matrix with desired features classifying each
@@ -380,7 +381,7 @@ def make_design_mat(timeseries: pd.DataFrame,
         dm['t_to_enlp_on'] = ts_['t_to_state_enlp_on'].copy()
 
     # Split licks by nth position in bout (as dummies).
-    dm = pull_lick_from_bout(dm, nth_licks, only_nth_lick=False)
+    dm = pull_lick_from_bout(dm, nth_licks, **kwargs)
 
     if interactions is not None:
         # 'flag' column for any NaNs in trial type (including timeouts).
