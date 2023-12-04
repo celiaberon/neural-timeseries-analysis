@@ -228,8 +228,8 @@ def read_multi_sessions(mouse: str,
         ts[list(channels - sig_cols)] = np.nan
 
         # Trim ts data to first and last timepoints with photometry signal.
-        first_idx = ts[channels].first_valid_index()
-        last_idx = ts[channels].last_valid_index()
+        first_idx = ts[list(channels)].first_valid_index()
+        last_idx = ts[list(channels)].last_valid_index()
         ts = ts.loc[first_idx:last_idx]
 
         if dm_kwargs:
