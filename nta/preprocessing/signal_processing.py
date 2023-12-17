@@ -356,7 +356,8 @@ def get_tdt_streams(tdt_data, sig_thresh: float = 0.05
 
 
 def calc_carrier_freq(raw_carrier_sigs: list[int | float],
-                      sampling_Hz: int | float) -> list[float]:
+                      sampling_Hz: int | float,
+                      n_points: int = 2**14) -> list[float]:
 
     '''
     Source: from DataJoint Pipeline
@@ -376,7 +377,6 @@ def calc_carrier_freq(raw_carrier_sigs: list[int | float],
     '''
 
     calc_carrier_freqs = []
-    n_points = 2 ** 14
 
     for carrier in raw_carrier_sigs:
 

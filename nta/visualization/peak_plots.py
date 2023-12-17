@@ -196,20 +196,29 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
                           ax=ax[label],
                           **plot_func_kws)
 
-    ax = config_plot(ax, metrics)
+    ax = config_plot(ax, channel, metrics, **kwargs)
 
     if kwargs.get('save'):
-        ...
+        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
 
     return fig, ax
 
 
-def config_plot(ax, metrics):
+def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
 
-    [ax_.set(ylabel=f'{metrics[k]} z-score') for k, ax_ in ax.items()]
+    ylab = channel.split('_')[0]
+    # [ax_.set(ylabel=f'{metrics[k]} {ylab}') for k, ax_ in ax.items()]
 
     try:
         ax['reward'].set(xlabel='')
+        ticks = [ax['Cue'].get_xticks()[0], ax['Cue'].get_xticks()[-1]]
+        # tick_labels = [int(i) for i in ticks]
+
+        ax['Cue'].set(xlabel=col_id, ylabel=ylab, xticks=ticks)#, xticklabels=tick_labels)
+        ax['reward'].set(xlabel='', ylabel=ylab, xticks=ticks)#, xticklabels=tick_labels)
+        ax['no reward'].set(xlabel=col_id, yticks=[0, -1, -2], xticks=ticks,
+                            ylim=(-3, 0), ylabel=ylab)
+        ax['no reward'].axhline(y=0, color='k', lw=2)
     except KeyError:
         pass
 

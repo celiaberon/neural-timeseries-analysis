@@ -144,7 +144,8 @@ def match_trial_ids(*args, allow_discontinuity: bool = False):
     matched_args = []
     for arg in args:
 
-        arg_ = arg.loc[arg.nTrial.isin(included_trials)].copy().reset_index()
+        arg_ = (arg.loc[arg.nTrial.isin(included_trials)].copy()
+                .reset_index(drop=True))
         matched_args.append(arg_)
 
     return matched_args
@@ -202,6 +203,7 @@ def clean_data(trials: pd.DataFrame,
             ntrials = len(trials_)
             trials_ = trials_.query('n_Cue == 1')
             cuep_dropped = ntrials - len(trials_)
+            print(f'{cuep_dropped=}')
             if store_results:
                 results['ENLP_dropped'] = enlp_dropped
                 results['CueP_dropped'] = cuep_dropped
@@ -221,7 +223,6 @@ def clean_data(trials: pd.DataFrame,
     # these blocks occur too infrequently -- less than 10 sessions
     min_block, max_block = clip_blocks
     trials_ = trials_.query('iBlock.between(@min_block, @max_block)')
-
     trials_, ts_ = match_trial_ids(trials_, ts_, allow_discontinuity=True)
 
     if store_results:

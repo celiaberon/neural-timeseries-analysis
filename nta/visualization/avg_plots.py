@@ -135,12 +135,12 @@ def config_plot_cpal(ts, column, *, cmap_colors=None, **kwargs):
             cpal = mpl.colors.LinearSegmentedColormap.from_list('cpal', cpal,
                                                                 N=cmap_colors)
             cpal = [cpal(i) for i in range(cmap_colors)]
-        case (str() | dict() | list()):  # Use palette if given explicitly
+        case (dict() | list()):  # Use palette if given explicitly
             cpal = cmap_colors
         case _:
-            cpal = 'deep'
+            cpal = sns.color_palette('deep', n_colors=ts[column].nunique())
 
-    if not isinstance(cpal, dict):
+    if (not isinstance(cpal, dict)) & is_numeric_dtype(ts[column]):
         labels = np.sort(ts[column].dropna().unique())
         if any(labels < 0) & any(labels > 0) & ~any(labels == 0):
             labels = np.sort(np.insert(labels, 0, 0))
@@ -232,12 +232,11 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                             x=f'{y_col}_times',
                             y=y_col,
                             hue=column,
-                            ax=ax1,
-                            palette=cpal)
+                            ax=ax1)
 
     # Actual lineplot for event-aligned neural data.
     if trial_units:
-        ax1 = lineplot_core(label=None,
+        ax1 = lineplot_core(#label=None,
                             units='nTrial',
                             estimator=None,
                             alpha=0.9)
@@ -246,7 +245,8 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                             n_boot=kwargs.get('n_boot', 1000),
                             errorbar=error,
                             err_kws={'alpha': 0.3},
-                            estimator=kwargs.get('estimator', 'mean'))
+                            estimator=kwargs.get('estimator', 'mean'),
+                            palette=cpal)
 
     fig, ax1 = config_plot(ax1, fig, ts, y_col, column, **kwargs)
 
