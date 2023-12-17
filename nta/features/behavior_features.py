@@ -281,6 +281,16 @@ def label_lick_position(timeseries: pd.DataFrame):
     return ts_['iLick']
 
 
+def map_sess_variable(trials: pd.DataFrame, ref_df: pd.DataFrame,
+                      col: str) -> pd.DataFrame:
+
+    trials_ = trials.copy()
+    sess_id = trials_.Session.unique().item()
+    trials_[col] = ref_df.query('Session == @sess_id')[col].values.squeeze()
+
+    return trials_
+
+
 def add_behavior_cols(trials: pd.DataFrame,
                       timeseries: pd.DataFrame,
                       fs: int = None) -> tuple:
@@ -337,8 +347,8 @@ def add_behavior_cols(trials: pd.DataFrame,
         trials_ = convert_to_AB_sequence(trials_, sequence_length=h_length)
 
     # Some additional columns that can be useful.
-    if 'session_clock' not in ts_.columns:
-        ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
+    # if 'session_clock' not in ts_.columns:
+    #     ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
     trials_['nLicks'] = count_consumption_licks(ts_, trials_)
     ts_['iLick'] = label_lick_position(ts_)
 
