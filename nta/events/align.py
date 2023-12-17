@@ -146,6 +146,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
                               window: tuple[int | float, int | float] = (1, 3),
                               fs: int = None,
                               quantify_peaks: bool = True,
+                              ignore_precautions: bool = False,
                               **kwargs
                               ):
 
@@ -179,16 +180,19 @@ def align_photometry_to_event(trials: pd.DataFrame,
     '''
 
     # Ensure that our photometry timeseries has unbroken trial continuity.
-    if ts_full.session.nunique() > 1:
-        assert ts_full.groupby('session').nTrial.diff().max() == 1, (
-            'Found discontinuous trial IDs, cannot extract traces'
-        )
+    if not ignore_precautions:
+        if ts_full.session.nunique() > 1:
+            assert ts_full.groupby('session').nTrial.diff().max() == 1, (
+                'Found discontinuous trial IDs, cannot extract traces'
+            )
+        else:
+            assert ts_full.nTrial.diff().max() == 1, (
+                'Found discontinuous trial IDs, cannot extract traces'
+            )
+        assert ~any(ts_full.get('continuity_broken', [0])), (
+            'Continuity broken flag exists')
     else:
-        assert ts_full.nTrial.diff().max() == 1, (
-            'Found discontinuous trial IDs, cannot extract traces'
-        )
-    assert ~any(ts_full.get('continuity_broken', [0])), (
-        'Continuity broken flag exists')
+        print('Warning: not checking for trial continuity')
 
     if isinstance(channel, str):
         channel = [channel]
