@@ -11,15 +11,31 @@ import pandas as pd
 from tqdm import tqdm
 
 import nta.preprocessing.quality_control as qc
-from nta.features.behavior_features import add_behavior_cols
+from nta.features.behavior_features import add_behavior_cols, map_sess_variable
 from nta.features.design_mat import make_design_mat
 from nta.utils import load_config_variables
+
+
+def get_session_log(root: str | Path,
+                    dataset: str):
+
+    root = set_data_overview_path(root)
+
+    if dataset in ['standard', 'colab']:
+        session_log = 'session_log_all_cohorts.csv'
+    elif dataset == 'dan':
+        session_log = 'session_log_dan.csv'
+
+    file_path = root / session_log
+    ref_df = pd.read_csv(file_path)
+
+    return ref_df
 
 
 def sessions_to_load(mouse: str,
                      dataset: str,
                      *,
-                     root: str = '',
+                     root: str | Path = '',
                      probs: int = 9010,
                      QC_pass: bool = True,
                      ) -> list:
@@ -44,22 +60,15 @@ def sessions_to_load(mouse: str,
             List of dates to load in for mouse.
     '''
 
-    root = set_data_overview_path(root)
+    ref_df = get_session_log(root, dataset)
 
-    if dataset in ['standard', 'colab']:
-        session_log = 'session_log_all_cohorts.csv'
-    elif dataset == 'dan':
-        session_log = 'session_log_dan.csv'
-
-    file_path = root / session_log
-    ref_df = pd.read_csv(file_path)
     probs = str(probs) if not isinstance(probs, str) else probs
     if dataset in ['standard', 'colab']:
         ref_df = ref_df.query('Mouse == @mouse \
                               & Condition == @probs & Pass == @QC_pass')
     elif dataset == 'dan':
         ref_df = ref_df.query('Mouse == @mouse \
-                              & Condition == @probs & trt_grp=="WT"')
+                              & Condition == @probs')# & trt_grp=="WT"')
     return list(set(ref_df.Date.values))
 
 
@@ -183,6 +192,7 @@ def read_multi_sessions(mouse: str,
                         QC_pass: bool = True,
                         dataset: str = None,
                         qc_photo: bool = True,
+                        verbose: bool = True,
                         **dm_kwargs) -> dict:
 
     if not root:
@@ -190,7 +200,7 @@ def read_multi_sessions(mouse: str,
     if dataset is None:
         dataset = 'standard'
     root = Path(root)
-    cohort = load_cohort_dict(root, dataset)
+    cohort = load_cohort_dict(root, dataset, mouse)
     # define list of files to work through (by session and preprocessing date)
     dates_list = sessions_to_load(mouse, probs=prob_set, QC_pass=QC_pass,
                                   root=root, dataset=dataset)
@@ -206,32 +216,35 @@ def read_multi_sessions(mouse: str,
         trials_path = file_path / f'{mouse}_trials.csv'
 
         if not (ts_path.exists() & trials_path.exists()):
-            print(f'skipped {mouse} {session_date}')
+            if verbose: print(f'skipped {mouse} {session_date}')
             continue
 
         ts = pd.read_parquet(ts_path)
         trials = pd.read_csv(trials_path, index_col=0)
 
         trials, ts = add_behavior_cols(trials, ts)
-
+        if dataset == 'dan':  # Need to do this better
+            trials = map_sess_variable(trials, get_session_log(root, dataset),
+                                       col=['expDay', 'trt_grp'])
         # If no photometry channels passed QC, move on to next session.
         channels = {'z_grnL', 'z_grnR'}
         if qc_photo:
             sig_cols = {ch for ch in channels
                         if not qc.is_normal(ts.get(ch, None),
-                                            sensor=cohort.get(mouse))}
+                                            sensor=cohort.get(mouse),
+                                            verbose=verbose)}
         else:
-            sig_cols = channels
+            sig_cols = {ch for ch in channels if ch in ts.columns}
+
         if not sig_cols:
             continue
         # Replace channels without signal with NaNs.
         ts[list(channels - sig_cols)] = np.nan
 
         # Trim ts data to first and last timepoints with photometry signal.
-        first_idx = ts[list(channels)].first_valid_index()
-        last_idx = ts[list(channels)].last_valid_index()
+        first_idx = ts[list(sig_cols)].first_valid_index()
+        last_idx = ts[list(sig_cols)].last_valid_index()
         ts = ts.loc[first_idx:last_idx]
-
         if dm_kwargs:
             ts = make_design_mat(ts, trials, **dm_kwargs)
 
@@ -278,10 +291,12 @@ def set_data_overview_path(root):
     return full_path
 
 
-def load_cohort_dict(root, dataset):
+def load_cohort_dict(root, dataset, mouse):
 
     if dataset in ['standard', 'colab']:
         cohort = load_config_variables(root, 'cohort')['cohort']
+    elif dataset == 'dan':
+        cohort = {mouse: 'dlight_vls'}
     else:
         raise NotImplementedError
 
