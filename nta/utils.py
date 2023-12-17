@@ -92,6 +92,23 @@ def save_plot_metadata(func):
     return inner
 
 
+def write_metadata(file_path, metadata, new_plot=True):
+
+    # Create new metadata text file or append to existing file for each
+    # subplot.
+    metadata_path = file_path.split('/')
+    metadata_path.insert(-1, 'metadata')
+    metadata_path = '/'.join(metadata_path)
+
+    metadata_fname = f'{metadata_path[:-4]}_metadata.txt'
+    write_style = ('a' if (os.path.exists(metadata_fname) and not new_plot)
+                   else 'w')
+    with open(metadata_fname, write_style) as f:
+        for line in metadata:
+            f.write(line)
+            f.write('\n')
+
+
 def write_metadata_lineplots(*args, **kwargs):
 
     fname = kwargs.get('fname')
@@ -130,13 +147,7 @@ def write_metadata_lineplots(*args, **kwargs):
 
     # Create new metadata text file or append to existing file for each
     # subplot.
-    metadata_fname = f'{fname[:-4]}_metadata.txt'
-    write_style = ('a' if (os.path.exists(metadata_fname) and not new_plot)
-                   else 'w')
-    with open(metadata_fname, write_style) as f:
-        for line in metadata:
-            f.write(line)
-            f.write('\n')
+    write_metadata(fname, metadata, new_plot)
 
 
 def write_metadata_peak_plots(*args, **kwargs):
@@ -173,12 +184,7 @@ def write_metadata_peak_plots(*args, **kwargs):
         metadata.insert(0, 'prep_data_params ='
                         f'{kwargs.get("prep_data_params", "DEFAULT")}')
 
-    # Create new metadata text file and insert info.
-    metadata_fname = f'{fname[:-4]}_metadata.txt'
-    with open(metadata_fname, 'w') as f:
-        for line in metadata:
-            f.write(line)
-            f.write('\n')
+    write_metadata(fname, metadata)
 
 
 def write_metadata_roc(*args, **kwargs):
@@ -216,9 +222,4 @@ def write_metadata_roc(*args, **kwargs):
         metadata.insert(0, 'prep_data_params ='
                         f'{kwargs.get("prep_data_params", "DEFAULT")}')
 
-    # Create new metadata text file and insert info.
-    metadata_fname = f'{fname[:-4]}_metadata.txt'
-    with open(metadata_fname, 'w') as f:
-        for line in metadata:
-            f.write(line)
-            f.write('\n')
+    write_metadata(fname, metadata)
