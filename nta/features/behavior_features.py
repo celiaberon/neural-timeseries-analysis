@@ -291,6 +291,54 @@ def map_sess_variable(trials: pd.DataFrame, ref_df: pd.DataFrame,
     return trials_
 
 
+def split_penalty_states(ts, penalty='ENLP'):
+
+    '''
+    Note: Can do this before photometry alignment now that using 23-29 as sync
+    pulse.
+    '''
+
+    def is_post_final_penalty(trial_ts, pen_state):
+
+        trial_id = trial_ts.nTrial.iloc[0].squeeze()
+
+        # last enl break is offset, second to last is onset of real enl.
+        true_enl_onset = np.where(trial_ts[pen_state].diff() != 0)[0][-2]
+        enl_onset_time = trial_ts.iloc[true_enl_onset]['session_clock']
+
+        return trial_ts['session_clock'] < enl_onset_time
+
+    ts_ = ts.copy()
+    pen_state = penalty[:-1]
+
+    pen_trials = ts_.loc[ts_[penalty] == 1].nTrial.dropna().unique()
+
+    if len(pen_trials) > 1:
+        # Make mask of the "true" state that runs to completion without any
+        # penalties.
+        mask = (ts_
+                .query('nTrial.isin(@pen_trials)')
+                .groupby('nTrial', as_index=False)
+                .apply(is_post_final_penalty, pen_state)
+                )
+    elif len(pen_trials) == 1:
+        mask = is_post_final_penalty(ts_.query('nTrial.isin(@pen_trials)'),
+                                     pen_state)
+    elif len(pen_trials) == 0:
+        return ts_
+
+    # label pre-penalty states as penalty states
+    ts_[f'state_{penalty}'] = 0
+    ts_.loc[ts_.nTrial.isin(pen_trials), f'state_{penalty}'] = (mask.values
+                                                                * ts_.query('nTrial.isin(@pen_trials)')[pen_state])
+
+    # remove pre-penalty states from true states
+    ts_.loc[ts_.nTrial.isin(pen_trials), pen_state] = ((1 - mask.values)
+                                                       * ts_.query('nTrial.isin(@pen_trials)')[pen_state])
+
+    return ts_
+
+
 def add_behavior_cols(trials: pd.DataFrame,
                       timeseries: pd.DataFrame,
                       fs: int = None) -> tuple:

@@ -7,7 +7,9 @@ import pandas as pd
 from tqdm import tqdm
 
 import nta.preprocessing.quality_control as qc
-from nta.features.behavior_features import add_behavior_cols, map_sess_variable
+from nta.features.behavior_features import (add_behavior_cols,
+                                            map_sess_variable,
+                                            split_penalty_states)
 from nta.features.design_mat import make_design_mat
 from nta.utils import load_config_variables
 
@@ -71,27 +73,44 @@ class DataSet(ABC):
         pass
 
     def set_save_path(self):
+        '''Set save path and create the directory.'''
         save_path = self.root / 'headfixed_DAB_data/figures' / self.label
         if not os.path.exists(os.path.join(save_path, 'metadata')):
             os.makedirs(os.path.join(save_path, 'metadata'))
         return save_path
 
     def set_channels(self):
+        '''Define channels to include as neural signal.'''
         channels = {'z_grnL', 'z_grnR', 'z_redR', 'z_redL'}
         return channels
 
-    @abstractmethod
-    def update_columns(self):
+    def update_columns(self, trials, ts):
+
+        '''Column updates (feature definitions, etc.) that should apply to all
+        datasets.'''
+        trials, ts = add_behavior_cols(trials, ts)
+        trials = trials.rename(columns={'-1reward': 'prev_rew'})
+
+        # Rectify error in penalty state allocation.
+        ts['ENL'] = ts['ENL'] + ts['state_ENLP']  # recover original state
+        ts['Cue'] = ts['Cue'] + ts['CueP']
+        ts = split_penalty_states(ts, penalty='ENLP')
+        ts = split_penalty_states(ts, penalty='CueP')
+
+        return trials, ts
+
+    def custom_update_columns(self):
+        '''Column updates that are dataset-specific.'''
         pass
 
     def set_timeseries_path(self):
-
+        '''Set path to timeseries data file.'''
         file_path = self.set_session_path()
         ts_path = file_path / f'{self.mouse_}_{self.session_}_timeseries.parquet.gzip'
         return ts_path
 
     def set_trials_path(self):
-
+        '''Set path to trial-level data file.'''
         file_path = self.set_session_path()
         trials_path = file_path / f'{self.mouse_}_trials.csv'
         return trials_path
@@ -113,6 +132,7 @@ class DataSet(ABC):
         return ts, trials
 
     def load_cohort_dict(self):
+        '''Load lookup table for sensor expressed in each mouse of cohort.'''
         cohort = load_config_variables(self.root, 'cohort')['cohort']
         return cohort
 
@@ -124,8 +144,6 @@ class DataSet(ABC):
         Make list of sessions to include for designated mouse
 
         Args:
-            mouse (str):
-                Mouse ID.
             probs (int):
                 Filter bandit data by probability conditions.
             QC_pass (bool):
@@ -265,6 +283,7 @@ class DataSet(ABC):
             ts, trials = self.load_session_data()
             if ts is None: continue
 
+            trials, ts = self.custom_update_columns(trials, ts)
             trials, ts = self.update_columns(trials, ts)
 
             ts = self.eval_photo_sig(ts)
@@ -287,7 +306,8 @@ class DataSet(ABC):
         return multi_sessions
 
     def eval_photo_sig(self, ts):
-
+        '''Run QC on photometry channels, filtering out data from sessions
+        where full session lacked real signal.'''
         # If no photometry channels passed QC, move on to next session.
         sensor = self.cohort.get(self.mouse_)
         if self.qc_photo:
@@ -342,13 +362,6 @@ class StandardData(DataSet):
     def set_channels(self):
         channels = {'z_grnL', 'z_grnR'}
         return channels
-
-    def update_columns(self, trials, ts):
-
-        trials, ts = add_behavior_cols(trials, ts)
-        trials = trials.rename(columns={'-1reward': 'prev_reward'})
-
-        return trials, ts
 
 
 class DeterministicData(DataSet):
@@ -424,13 +437,10 @@ class DeterministicData(DataSet):
                     for s_ in sessions]
         return sessions
 
-    def update_columns(self, trials, ts):
+    def custom_update_columns(self, trials, ts):
 
         trials = trials.rename(columns={'Direction': 'direction'})
         trials['flag_block'] = 0
-        trials, ts = add_behavior_cols(trials, ts)
-        trials = trials.rename(columns={'-1reward': 'prev_reward'})
-
         return trials, ts
 
 
@@ -441,3 +451,27 @@ class SplitConditions(DataSet):
                  **kwargs):
         super().__init__(mice, **kwargs)
         self.dataset = 'dan'
+        self.channels = self.set_channels()
+
+    def set_root(self):
+        '''Sets the root path for the dataset'''
+        return Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
+
+    def set_data_path(self):
+        '''Sets the path to the session data'''
+        return self.root / 'headfixed_DAB_data/preprocessed_data/Dan_data'
+
+    def set_data_overview_path(self):
+        '''Sets the path to the csv containing session summary'''
+        return self.root / 'data_overviews' / 'session_log_dan.csv'
+
+    def set_session_path(self):
+        '''Sets path to single session data'''
+        return self.data_path / self.mouse_ / self.session_
+
+    def set_channels(self):
+        channels = {'z_grnL', 'z_grnR'}
+        return channels
+
+    def custom_update_columns(self, trials, ts):
+        pass
