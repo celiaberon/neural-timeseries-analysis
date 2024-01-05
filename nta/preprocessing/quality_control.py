@@ -50,14 +50,13 @@ def QC_included_trials(ts: pd.DataFrame,
     ts_ = ts.copy()
 
     # flag only blocks that don't disrupt photometry timeseries
-    min_trial = trials_.query('~flag_block').nTrial.min()
-    max_trial = trials_.query('~flag_block').nTrial.max()
+    min_trial = trials_.query('flag_block == 0').nTrial.min()
+    max_trial = trials_.query('flag_block == 0').nTrial.max()
     flagged_blocks = (trials_
                       .query('~nTrial.between(@min_trial, @max_trial)')
                       .nTrial.dropna().values)
 
     trials_ = trials_.loc[~trials_.nTrial.isin(flagged_blocks)]
-
     # Match min and max trial IDs only (can differ internally but offset will)
     # be consistent.
     trials_, ts_ = match_trial_ids(trials_, ts_,
@@ -345,7 +344,8 @@ def is_normal(ts, include_score=False, verbose=False, thresh_score=0,
         return True
 
     thresholds = {'grabda_vls': (0.5, 0.8),
-                  'grabda_dms': (0.1, 0.2)}
+                  'grabda_dms': (0.1, 0.2),
+                  'rDA': (0.5, 0.8)}
 
     skew_thresh, kurt_thresh = thresholds.get(sensor)
 
