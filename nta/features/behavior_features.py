@@ -339,6 +339,44 @@ def split_penalty_states(ts, penalty='ENLP'):
     return ts_
 
 
+def flag_blocks_for_timeouts(trials, threshold=0.25):
+
+    '''
+    Flag any blocks with >threshold proportion of timeout trials (i.e.
+    'timeout_blocks'). Also flag blocks, starting with first and last blocks
+    as a rule and extending through any consecutive blocks with excessive
+    timeouts.
+    '''
+    trials_ = trials.copy()
+    # flag first and last block, and recursively flag n-1 continuous blocks
+    # of timeouts > threshold.
+    trials_['flag_block'] = False
+    trials_.loc[trials_.iBlock == trials_.iBlock.min(), 'flag_block'] = True
+    trials_.loc[trials_.iBlock == trials_.iBlock.max(), 'flag_block'] = True
+
+    block_search = trials_.iBlock.max() - 1
+    continue_search = True
+    while continue_search:
+        curr_block = trials_.query('iBlock == @block_search')
+        # If timeouts exceed threshold for timeouts
+        if np.mean(curr_block.timeout) > threshold:
+            trials_.loc[trials_.iBlock == block_search, 'flag_block'] = True
+            block_search -= 1
+        else:
+            continue_search = False
+
+    # Also report on any block with timeouts above threshold.
+    trials_['timeout_block'] = False
+    for i, block in trials_.groupby('iBlock'):
+        above_thresh = np.mean(block.timeout) > threshold
+        trials_.loc[trials_.iBlock == i, 'timeout_block'] = above_thresh
+
+    # record the threshold being used.
+    trials_['timeout_thresh'] = threshold
+
+    return trials_
+
+
 def add_behavior_cols(trials: pd.DataFrame,
                       timeseries: pd.DataFrame,
                       fs: int = None) -> tuple:
