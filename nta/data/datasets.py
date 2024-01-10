@@ -7,12 +7,12 @@ import pandas as pd
 from tqdm import tqdm
 
 import nta.preprocessing.quality_control as qc
-from nta.features.behavior_features import (add_behavior_cols,
-                                            map_sess_variable,
-                                            split_penalty_states)
+from nta.features import behavior_features as bf
 from nta.features.design_mat import make_design_mat
 from nta.utils import load_config_variables
 
+ally_data = DeterministicData(mice='T477')
+timeseries = ally_data.ts
 
 class DataSet(ABC):
 
@@ -86,16 +86,18 @@ class DataSet(ABC):
 
     def update_columns(self, trials, ts):
 
-        '''Column updates (feature definitions, etc.) that should apply to all
-        datasets.'''
-        trials, ts = add_behavior_cols(trials, ts)
+        '''
+        Column updates (feature definitions, etc.) that should apply to all
+        datasets.
+        '''
+        trials, ts = bf.add_behavior_cols(trials, ts)
         trials = trials.rename(columns={'-1reward': 'prev_rew'})
 
         # Rectify error in penalty state allocation.
         ts['ENL'] = ts['ENL'] + ts['state_ENLP']  # recover original state
-        ts['Cue'] = ts['Cue'] + ts['CueP']
-        ts = split_penalty_states(ts, penalty='ENLP')
-        ts = split_penalty_states(ts, penalty='CueP')
+        ts['Cue'] = ts['Cue'] + ts['CueP']  # recover original state
+        ts = bf.split_penalty_states(ts, penalty='ENLP')
+        ts = bf.split_penalty_states(ts, penalty='CueP')
 
         return trials, ts
 
@@ -341,7 +343,7 @@ class StandardData(DataSet):
                  **kwargs):
         super().__init__(mice, **kwargs)
         self.dataset = 'celia'
-        self.channels = self.set_channels()
+        # self.channels = self.set_channels()
 
     def set_root(self):
         '''Sets the root path for the dataset'''
@@ -371,7 +373,7 @@ class DeterministicData(DataSet):
                  **kwargs):
         super().__init__(mice, **kwargs)
         self.dataset = 'ally'
-        self.channels = self.set_channels()
+        # self.channels = self.set_channels()
 
     def set_root(self):
         '''Sets the root path for the dataset'''
@@ -440,7 +442,7 @@ class DeterministicData(DataSet):
     def custom_update_columns(self, trials, ts):
 
         trials = trials.rename(columns={'Direction': 'direction'})
-        trials['flag_block'] = 0
+        trials = bf.flag_blocks_for_timeouts(trials)
         return trials, ts
 
 
