@@ -11,8 +11,6 @@ from nta.features import behavior_features as bf
 from nta.features.design_mat import make_design_mat
 from nta.utils import load_config_variables
 
-ally_data = DeterministicData(mice='T477')
-timeseries = ally_data.ts
 
 class DataSet(ABC):
 
@@ -119,8 +117,6 @@ class DataSet(ABC):
 
     def load_session_data(self):
         '''Loads data from single session'''
-        file_path = self.set_session_path()
-
         trials_path = self.set_trials_path()
         ts_path = self.set_timeseries_path()
 
