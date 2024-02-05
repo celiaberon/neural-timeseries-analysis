@@ -45,8 +45,8 @@ class DataSet(ABC):
         if not isinstance(mice, list):
             self.mouse_ = mice
             multi_sessions = self.read_multi_sessions(qc_params)
-            self.ts = multi_sessions['ts']
-            self.trials = multi_sessions['trials']
+            self.ts = multi_sessions.get('ts')
+            self.trials = multi_sessions.get('trials')
         else:
             self.read_multi_mice(qc_params)
 
