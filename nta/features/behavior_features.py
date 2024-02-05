@@ -106,6 +106,15 @@ def build_history_sequence(trials: pd.DataFrame,
 
     trials_ = trials.copy()
 
+    if 'k1' not in trials_.columns:
+        # Create column with choice-outcome code to construct trial histories.
+        trials_ = encode_choice_reward_pairing(trials_)
+
+    for h_length in range(1, sequence_length):
+        if f'k{h_length + 1}' in trials_.columns:
+            continue
+        trials_[f'k{h_length + 1}'] = trials_['k1'].shift(h_length)
+
     # Initialize column with current trial code.
     trials_[f'RL_seq{sequence_length}'] = trials_[f'k{sequence_length}']
     N = sequence_length - 1
@@ -378,7 +387,7 @@ def flag_blocks_for_timeouts(trials, threshold=0.25):
 
 
 def add_behavior_cols(trials: pd.DataFrame,
-                      timeseries: pd.DataFrame,
+                      timeseries: pd.DataFrame = None,
                       fs: int = None) -> tuple:
 
     '''
@@ -405,13 +414,16 @@ def add_behavior_cols(trials: pd.DataFrame,
         event to current trial and vice versa for -1 prefix
     '''
 
+    history_features = ['seq2', 'seq3', 'tSelection', 'direction', 'Reward']
+    future_features = ['seq2', 'seq3', 'tSelection', 'direction', 'Switch']
+
     trials_ = trials.copy()
-    ts_ = timeseries.copy()
+    if isinstance(timeseries, pd.DataFrame):
+        ts_ = timeseries.copy()
+        if 'Mouse' not in ts_.columns:
+            ts_['Mouse'] = [sess[:3] for sess in ts_.session.values]
 
     assert trials_.Session.dropna().nunique() == 1  # because of row shifting
-
-    if 'Mouse' not in ts_.columns:
-        ts_['Mouse'] = [sess[:3] for sess in ts_.session.values]
 
     trials_['enlp_trial'] = trials_['n_ENL'] > 1
     trials_ = get_reward_seq(trials_)  # number cumulative rewarded and losses
@@ -419,15 +431,10 @@ def add_behavior_cols(trials: pd.DataFrame,
                                   shift_forward=True,
                                   new_col='outcome_seq_history')
 
-    # Create column with choice-outcome code to construct trial histories.
-    trials_ = encode_choice_reward_pairing(trials_)
-
     # Build up columns defining sequential history for each trial and
     # history length. NOTE: here increasing numbers denote advancing
     # back into history from k1=current trial.
     history_lengths = range(2, 4)
-    for h_length in range(1, max(history_lengths)):
-        trials_[f'k{h_length + 1}'] = trials_['k1'].shift(h_length)
     for h_length in history_lengths:
         trials_ = build_history_sequence(trials_, h_length)
         trials_ = convert_to_AB_sequence(trials_, sequence_length=h_length)
@@ -435,16 +442,15 @@ def add_behavior_cols(trials: pd.DataFrame,
     # Some additional columns that can be useful.
     # if 'session_clock' not in ts_.columns:
     #     ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
-    trials_['nLicks'] = count_consumption_licks(ts_, trials_)
-    ts_['iLick'] = label_lick_position(ts_)
+    if isinstance(timeseries, pd.DataFrame):
+        trials_['nLicks'] = count_consumption_licks(ts_, trials_)
+        history_features.append(['nLicks'])
+        ts_['iLick'] = label_lick_position(ts_)
 
-    # Calculate interlick interval (independent of state lick occurs within).
-    ts_['ILI'] = ts_.query('~iSpout.isna()').session_clock.diff()
+        # Calculate interlick interval (independent of state lick occurs within).
+        ts_['ILI'] = ts_.query('~iSpout.isna()').session_clock.diff()
 
     # Forward and backward shifts that can be useful (need to shift up front).
-    history_features = ['seq2', 'seq3', 'tSelection', 'direction', 'Reward',
-                        'nLicks']
-    future_features = ['seq2', 'seq3', 'tSelection', 'direction', 'Switch']
     for feature in history_features:
         trials_ = shift_trial_feature(trials_, col=feature, n_shift=1,
                                       shift_forward=True)
@@ -452,4 +458,9 @@ def add_behavior_cols(trials: pd.DataFrame,
         trials_ = shift_trial_feature(trials_, col=feature, n_shift=1,
                                       shift_forward=False)
 
-    return trials_, ts_
+    trials_ = trials_.drop(columns=['sSelection'])
+
+    if isinstance(timeseries, pd.DataFrame):
+        return trials_, ts_
+    else:
+        return trials_
