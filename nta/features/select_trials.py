@@ -152,7 +152,7 @@ def match_trial_ids(*args, allow_discontinuity: bool = False):
 
 
 def clean_data(trials: pd.DataFrame,
-               ts: pd.DataFrame,
+               ts: pd.DataFrame = None,
                allow_discontinuity: bool = False,
                drop_penalties: bool = False,
                drop_timeout: bool = False,
@@ -189,7 +189,9 @@ def clean_data(trials: pd.DataFrame,
     '''
 
     trials_ = trials.copy()
-    ts_ = ts.copy()
+    include_ts = isinstance(ts, pd.DataFrame)
+    if include_ts:
+        ts_ = ts.copy()
     results = {}
 
     if allow_discontinuity:
@@ -216,15 +218,22 @@ def clean_data(trials: pd.DataFrame,
             if store_results:
                 results['timeouts_dropped'] = timeouts_dropped
 
-        trials_ = trials_.query('flag_block == 0')
+        trials_ = trials_.query('flag_block == 0').copy()
         trials_['continuity_broken'] = 1
-        ts_['continuity_broken'] = 1
+        if include_ts:
+            ts_['continuity_broken'] = 1
 
     # these blocks occur too infrequently -- less than 10 sessions
     min_block, max_block = clip_blocks
     trials_ = trials_.query('iBlock.between(@min_block, @max_block)')
-    trials_, ts_ = match_trial_ids(trials_, ts_, allow_discontinuity=True)
+
+    if include_ts:
+        trials_, ts_ = match_trial_ids(trials_, ts_, allow_discontinuity=True)
 
     if store_results:
-        return trials_, ts_, results
-    return trials_, ts_
+        if include_ts:
+            return trials_, ts_, results
+        return trials_, results
+    if include_ts:
+        return trials_, ts_
+    return trials_
