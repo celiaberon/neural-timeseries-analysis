@@ -67,6 +67,17 @@ def repeat_and_store(num_reps):
     return decorator_repeat
 
 
+def single_session(func):
+    def inner(*args, **kwargs):
+
+        trials = args[0]
+        assert trials.Session.dropna().nunique() == 1, (
+            'Not written for multi-session processing')
+        output = func(*args, **kwargs)
+        return output
+    return inner
+
+
 def save_plot_metadata(func):
 
     def inner(*args, **kwargs):

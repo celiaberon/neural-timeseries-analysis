@@ -5,6 +5,8 @@
 import numpy as np
 import pandas as pd
 
+from nta.utils import single_session
+
 
 def shift_trial_feature(trials: pd.DataFrame,
                         col: str,
@@ -41,10 +43,10 @@ def shift_trial_feature(trials: pd.DataFrame,
 
     if shift_forward:
         # Use (-) for trial histories (N trials back from current trial).
-        trials_[f'-{n_shift}{new_col}'] = trials_[col].shift(n_shift)
+        trials_[f'-{n_shift}{new_col}'] = trials_.groupby('Session')[col].shift(n_shift)
     else:
         # Use (+) for subsequent trials (N trials forward from current).
-        trials_[f'+{n_shift}{new_col}'] = trials_[col].shift(-n_shift)
+        trials_[f'+{n_shift}{new_col}'] = trials_.groupby('Session')[col].shift(-n_shift)
 
     return trials_
 
@@ -79,12 +81,14 @@ def encode_choice_reward_pairing(trials: pd.DataFrame):
     # Look up mapping for each trial with data (not null) for both reward and
     # direction.
     twd_ = trials_.copy().dropna(subset=['Reward', 'direction'])
+    trials_['k1'] = None
     trials_.loc[twd_.index, 'k1'] = [trial_mappings[h] for h in
                                      zip(twd_.direction, twd_.Reward)]
 
     return trials_
 
 
+@single_session
 def build_history_sequence(trials: pd.DataFrame,
                            sequence_length: int):
 
@@ -163,11 +167,13 @@ def convert_to_AB_sequence(trials: pd.DataFrame,
         reference_direction = row[f'k{sequence_length}'].upper()
         mappings = mappings_LUT[reference_direction]
         sequences = ''.join([mappings.get(s) for s in row[column]])
+        trials_[f'seq{sequence_length}'] = None
         trials_.loc[i, f'seq{sequence_length}'] = sequences
 
     return trials_
 
 
+@single_session
 def get_reward_seq(trials: pd.DataFrame) -> pd.DataFrame:
 
     '''
@@ -207,6 +213,7 @@ def get_reward_seq(trials: pd.DataFrame) -> pd.DataFrame:
     return trials_
 
 
+@single_session
 def add_timeseries_clock(timeseries: pd.DataFrame,
                          fs: int = 50):
 
