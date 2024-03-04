@@ -158,7 +158,7 @@ def convert_to_AB_sequence(trials: pd.DataFrame,
     mappings_LUT = {'L': mappings_ref_L, 'R': mappings_ref_R}
 
     column = f'RL_seq{sequence_length}'
-
+    trials_[f'seq{sequence_length}'] = None
     for i, row in trials_.iterrows():
 
         if pd.isna(row[column]):
@@ -167,7 +167,6 @@ def convert_to_AB_sequence(trials: pd.DataFrame,
         reference_direction = row[f'k{sequence_length}'].upper()
         mappings = mappings_LUT[reference_direction]
         sequences = ''.join([mappings.get(s) for s in row[column]])
-        trials_[f'seq{sequence_length}'] = None
         trials_.loc[i, f'seq{sequence_length}'] = sequences
 
     return trials_
