@@ -37,7 +37,6 @@ def shift_trial_feature(trials: pd.DataFrame,
     '''
 
     trials_ = trials.copy()
-
     if not new_col:
         new_col = col.lower()
 
@@ -450,7 +449,7 @@ def add_behavior_cols(trials: pd.DataFrame,
     #     ts_['session_clock'] = add_timeseries_clock(ts_, fs=fs)
     if isinstance(timeseries, pd.DataFrame):
         trials_['nLicks'] = count_consumption_licks(ts_, trials_)
-        history_features.append(['nLicks'])
+        history_features.append('nLicks')
         ts_['iLick'] = label_lick_position(ts_)
 
         # Calculate interlick interval (independent of state lick occurs within).

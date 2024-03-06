@@ -331,6 +331,43 @@ class DataSet(ABC):
 
         return ts
 
+    def get_sampling_freq(self, timestamps):
+
+        '''
+        Calculate a sampling frequency based on the interval between timesteps in
+        timeseries.
+
+        Args:
+            timestamps:
+                Series of timestamps corresponding to sampling rate for data.
+
+        Returns:
+            tstep:
+                Interval (in seconds) between individual samples in the data.
+            fs:
+                Sampling frequency (in Hz) of the timeseries.
+        '''
+        if not isinstance(timestamps, pd.Series):
+            # tstep = st.mode(np.diff(timestamps), keepdims=False)[0].squeeze()
+            tstamps = pd.Series(timestamps)
+        else:
+            tstamps = timestamps.copy()
+
+        tsteps = (tstamps
+                  .reset_index(drop=True)
+                  .diff()
+                  .dropna()
+                  .astype('float64')
+                  .round(6))
+        tsteps_consistency = (tsteps
+                              .value_counts(normalize=True)
+                              .max())
+
+        assert tsteps_consistency > 0.99, 'multiple sampling rates detected'
+
+        self.tstep = tsteps.mode().squeeze()
+        self.fs = 1 / self.tstep
+
 
 class StandardData(DataSet):
 
