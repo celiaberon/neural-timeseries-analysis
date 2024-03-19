@@ -295,6 +295,53 @@ def label_lick_position(timeseries: pd.DataFrame):
     return ts_['iLick']
 
 
+def label_bout_group(ts, trials, bout_ili_thresh=0.4):
+
+    '''
+    Take all licks with ILI over threshold and define them as onset of new
+    bout, which each get own numberic ID. Define consumption bout as first
+    bout in consumption period.
+
+    Args:
+        ts:
+            Timeseries form of data.
+        trials:
+            Trials form of data.
+        bout_ili_thresh:
+            Threshold above which interlick interval is classified as new lick
+            bout (likely based on mean/std of ILI for highly stereotyped lick
+            bouts).
+    '''
+    ts_ = ts.copy()
+    trials_ = trials.copy()
+    timed_licks = ts_.dropna(subset='ILI').copy()
+    assert all(timed_licks.iSpout != 0)
+
+    # Use ILI threshold to separate lick bouts and assign to bout group.
+    timed_licks['lick_bout_thresh'] = timed_licks['ILI'] > bout_ili_thresh
+    timed_licks['bout_group'] = timed_licks.lick_bout_thresh.cumsum()
+
+    # Bout group ID of first counsumption bout for each trial.
+    consumption_bouts = (timed_licks.query('stateConsumption==1')
+                                    .groupby('nTrial')
+                                    .nth(0)[['nTrial', 'bout_group']]
+                                    .set_index('nTrial', drop=True))
+
+    # Add columns for bout group and consumption bout group ID in full
+    # timeseries df.
+    ts_.loc[timed_licks.index.values, 'bout_group'] = timed_licks['bout_group']
+    ts_['cons_bout'] = ts_['nTrial'].map(consumption_bouts['bout_group'])
+
+    # Add column for number of consumption licks in first consumption bout to
+    # trial df.
+    consumption_nLicks = (ts_.query('bout_group==cons_bout')
+                             .groupby('nTrial')['iSpout']
+                             .count())
+    trials_['cons_nLicks'] = trials_['nTrial'].map(consumption_nLicks)
+
+    return ts_, trials_
+
+
 def map_sess_variable(trials: pd.DataFrame, ref_df: pd.DataFrame,
                       col: str) -> pd.DataFrame:
 
@@ -454,7 +501,7 @@ def add_behavior_cols(trials: pd.DataFrame,
 
         # Calculate interlick interval (independent of state lick occurs within).
         ts_['ILI'] = ts_.query('iSpout != 0').session_clock.diff()
-
+        ts_, trials_ = label_bout_group(ts_, trials_)
     # Forward and backward shifts that can be useful (need to shift up front).
     for feature in history_features:
         trials_ = shift_trial_feature(trials_, col=feature, n_shift=1,
