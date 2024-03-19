@@ -236,8 +236,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
 
     # Actual lineplot for event-aligned neural data.
     if trial_units:
-        ax1 = lineplot_core(#label=None,
-                            units='nTrial',
+        ax1 = lineplot_core(units='nTrial',
                             estimator=None,
                             alpha=0.9)
     else:
@@ -359,7 +358,7 @@ def config_plot(ax,
     else:
         # Replace legend with colorbar if conditioning on numeric variable
         # that contains more than two conditions.
-        if is_numeric_dtype(ts[column]) & (ts[column].dropna().nunique() > 2):
+        if is_numeric_dtype(ts[column]) & (ts[column].dropna().nunique() > 3):
             fig, ax = convert_leg_to_cbar(fig, ax, **kwargs)
         else:
             handles, labels = ax.get_legend_handles_labels()
