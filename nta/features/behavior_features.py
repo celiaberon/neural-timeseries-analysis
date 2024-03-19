@@ -453,7 +453,7 @@ def add_behavior_cols(trials: pd.DataFrame,
         ts_['iLick'] = label_lick_position(ts_)
 
         # Calculate interlick interval (independent of state lick occurs within).
-        ts_['ILI'] = ts_.query('~iSpout.isna()').session_clock.diff()
+        ts_['ILI'] = ts_.query('iSpout != 0').session_clock.diff()
 
     # Forward and backward shifts that can be useful (need to shift up front).
     for feature in history_features:
