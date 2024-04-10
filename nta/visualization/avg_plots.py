@@ -137,6 +137,9 @@ def config_plot_cpal(ts, column, *, cmap_colors=None, **kwargs):
             cpal = [cpal(i) for i in range(cmap_colors)]
         case (dict() | list()):  # Use palette if given explicitly
             cpal = cmap_colors
+        case str():
+            cpal = sns.color_palette(cmap_colors, n_colors=ts[column].nunique())
+
         case _:
             cpal = sns.color_palette('deep', n_colors=ts[column].nunique())
 
