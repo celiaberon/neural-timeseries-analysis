@@ -9,7 +9,7 @@ from tqdm import tqdm
 import nta.preprocessing.quality_control as qc
 from nta.features import behavior_features as bf
 from nta.features.design_mat import make_design_mat
-from nta.utils import load_config_variables
+from nta.utils import downcast_all_numeric, load_config_variables
 
 
 class DataSet(ABC):
@@ -20,7 +20,9 @@ class DataSet(ABC):
                  qc_photo: bool = True,
                  qc_params: dict = {},
                  label: str = '',
-                 save: bool = True):
+                 save: bool = True,
+                 col_grp: str = 'minimal',
+                 add_cols: set[str] = {}):
 
         # if not isinstance(mice, list):
         #     mice = [mice]
@@ -28,6 +30,8 @@ class DataSet(ABC):
         self.verbose = verbose
         self.qc_photo = qc_photo
         self.label = label if label else self.mice
+        self.col_grp = col_grp
+        self.add_cols = add_cols
 
         self.root = self.set_root()
         self.data_path = self.set_data_path()
@@ -36,6 +40,7 @@ class DataSet(ABC):
         if self.save:
             self.save_path = self.set_save_path()
         self.cohort = self.load_cohort_dict()
+        self.palettes = load_config_variables(self.root)
 
         self.ts = pd.DataFrame()
         self.trials = pd.DataFrame()
@@ -49,6 +54,12 @@ class DataSet(ABC):
             self.trials = multi_sessions.get('trials')
         else:
             self.read_multi_mice(qc_params)
+
+        self.trials = bf.order_sessions(self.trials)
+
+        # Downcast datatypes to make processing on dataset more memory efficient.
+        self.trials = downcast_all_numeric(self.trials)
+        self.ts = downcast_all_numeric(self.ts)
 
     @abstractmethod
     def set_root(self):
@@ -97,11 +108,20 @@ class DataSet(ABC):
         ts = bf.split_penalty_states(ts, penalty='ENLP')
         ts = bf.split_penalty_states(ts, penalty='CueP')
 
+        if self.col_grp == 'minimal':
+            cols_to_drop = {'system_nTrial', 'raw_grnR', 'raw_grnL',
+                            'detrend_grnR', 'detrend_grnL', 'outcome_licks',
+                            'trial_clock', 'TO', 'nENL', 'iBlock',
+                            'state_ENLP', 'ENLP', 'CueP', 'stateConsumption',
+                            'session'} & set(ts.columns)
+            col_to_drop = list(cols_to_drop - self.add_cols)
+            ts = ts.drop(columns=col_to_drop)
+
         return trials, ts
 
-    def custom_update_columns(self):
+    def custom_update_columns(self, trials, ts):
         '''Column updates that are dataset-specific.'''
-        pass
+        return trials, ts
 
     def set_timeseries_path(self):
         '''Set path to timeseries data file.'''
@@ -124,8 +144,60 @@ class DataSet(ABC):
             if self.verbose: print(f'skipped {self.mouse_} {self.session_}')
             return None, None
 
-        ts = pd.read_parquet(ts_path)
-        trials = pd.read_csv(trials_path, index_col=0)
+        trial_dtypes = {'nTrial': np.int32,
+                       'Mouse': 'object',
+                       'Date': 'object',
+                       'Session': 'object',
+                       'Condition': np.int16,
+                       'sSelection': np.int8,
+                       'tSelection': np.int16,
+                       'direction': np.float32,
+                       'Reward': np.float32,
+                       'T_Reward': np.float32,
+                       'T_ENL': np.int16,
+                       'n_ENL': np.int8,
+                       'n_Cue': np.int8,
+                       'State': np.float32,
+                       'selHigh': np.float32,
+                       'iBlock': np.int8,
+                       'iInBlock': np.int8,
+                       'blockLength': np.int8,
+                       'flag_block': 'bool',
+                       'timeout_block': 'bool',
+                       'timeout_thresh': np.float32,
+                       'timeout': 'bool',
+                       'Switch': np.float32}
+
+        ts_dtypes = {
+                    #  'detrend_grnR': np.float32,
+                    #  'raw_grnR': np.float32,
+                    #  'detrend_grnL': np.float32,
+                     'session_clock': np.float32,
+                    #  'raw_grnL': np.float32,
+                    #  'z_grnR': np.float32,
+                    #  'z_grnL': np.float32,
+                     'nTrial': np.int32,
+                     'iBlock': np.float32,
+                     'nENL': np.float32,
+                     'iSpout': np.int8,
+                     'ENLP': np.int8,
+                     'CueP': np.int8,
+                     'ENL': np.int8,
+                     'Cue': np.int8,
+                     'Select': np.int8,
+                     'stateConsumption': np.int8,
+                     'TO': np.int8,
+                     'system_nTrial': np.int8,
+                     'outcome_licks': np.int8,
+                     'Consumption': np.int8,
+                     'state_ENLP': np.int8,
+                    #  'state_CueP': np.int8,
+                     'session': 'object',
+                     'trial_clock': np.float32,
+                     'fs': np.float32}
+
+        ts = pd.read_parquet(ts_path).astype(ts_dtypes)
+        trials = pd.read_csv(trials_path, index_col=0, dtype=trial_dtypes)
 
         return ts, trials
 
@@ -214,8 +286,8 @@ class DataSet(ABC):
                 ss_vals['nTrial_orig'] = ss_vals['nTrial'].copy()
 
             # Create session column to match across dataframes.
-            if 'session' not in ss_vals.columns:
-                ss_vals['session'] = '_'.join([self.mouse_, self.session_])
+            if 'Session' not in ss_vals.columns:
+                ss_vals['Session'] = '_'.join([self.mouse_, self.session_])
 
             # Add max current trial value to all new trials before concatenation.
             tmp_copy = ss_vals.copy()
@@ -331,7 +403,7 @@ class DataSet(ABC):
 
         return ts
 
-    def get_sampling_freq(self, timestamps):
+    def get_sampling_freq(self, timestamps=None):
 
         '''
         Calculate a sampling frequency based on the interval between timesteps in
@@ -347,8 +419,10 @@ class DataSet(ABC):
             fs:
                 Sampling frequency (in Hz) of the timeseries.
         '''
-        if not isinstance(timestamps, pd.Series):
-            # tstep = st.mode(np.diff(timestamps), keepdims=False)[0].squeeze()
+
+        if timestamps is None:
+            tstamps = self.ts.session_clock.copy()
+        elif not isinstance(timestamps, pd.Series):
             tstamps = pd.Series(timestamps)
         else:
             tstamps = timestamps.copy()
@@ -357,7 +431,7 @@ class DataSet(ABC):
                   .reset_index(drop=True)
                   .diff()
                   .dropna()
-                  .astype('float64')
+                  .astype('float32')
                   .round(6))
         tsteps_consistency = (tsteps
                               .value_counts(normalize=True)

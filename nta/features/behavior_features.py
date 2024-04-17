@@ -388,6 +388,7 @@ def split_penalty_states(ts, penalty='ENLP'):
     elif len(pen_trials) == 0:
         return ts_
 
+    mask = mask.astype(ts[pen_state].dtype)
     # label pre-penalty states as penalty states
     ts_[f'state_{penalty}'] = 0
     ts_.loc[ts_.nTrial.isin(pen_trials), f'state_{penalty}'] = (mask.values
@@ -437,6 +438,18 @@ def flag_blocks_for_timeouts(trials, threshold=0.25):
 
     return trials_
 
+
+def order_sessions(trials):
+
+    t_ = trials.copy()
+    t_['Date'] = pd.to_datetime(t_['Date'], format='%Y_%m_%d')
+
+    for mouse, m_dates in t_.groupby('Mouse'):
+        sorted_dates = np.sort(m_dates.Date.unique())
+        sorted_dates = {date: i for i, date in enumerate(sorted_dates)}
+        t_.loc[t_['Mouse'] == mouse, 'session_order'] = m_dates['Date'].map(sorted_dates)
+
+    return t_
 
 def add_behavior_cols(trials: pd.DataFrame,
                       timeseries: pd.DataFrame = None,

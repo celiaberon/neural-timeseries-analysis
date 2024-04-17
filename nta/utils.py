@@ -3,6 +3,7 @@ import functools
 import os
 
 import numpy as np
+import pandas as pd
 import seaborn as sns
 
 
@@ -128,7 +129,7 @@ def write_metadata_lineplots(*args, **kwargs):
 
     # Number of sessions per mouse.
     sess_per_mouse = np.array(exploded_trials
-                              .groupby("Mouse", as_index=False)["session"]
+                              .groupby("Mouse", as_index=False)["Session"]
                               .nunique())
     grp_on = (kwargs.get('column')
               if not kwargs.get('ls_col', False)
@@ -168,7 +169,7 @@ def write_metadata_peak_plots(*args, **kwargs):
 
     # Number of sessions per mouse.
     sess_per_mouse = np.array(peaks
-                              .groupby("Mouse", as_index=False)["session"]
+                              .groupby("Mouse", as_index=False)["Session"]
                               .nunique())
 
     # Number of trials per condition (trace) in plot.
@@ -205,7 +206,7 @@ def write_metadata_roc(*args, **kwargs):
 
     # Number of sessions per mouse.
     sess_per_mouse = np.array(trials
-                              .groupby("Mouse", as_index=False)["session"]
+                              .groupby("Mouse", as_index=False)["Session"]
                               .nunique())
 
     # Number of trials per condition (trace) in plot.
@@ -234,3 +235,14 @@ def write_metadata_roc(*args, **kwargs):
                         f'{kwargs.get("prep_data_params", "DEFAULT")}')
 
     write_metadata(fname, metadata)
+
+
+def downcast_all_numeric(df):
+
+    fcols = df.select_dtypes('float').columns
+    icols = df.select_dtypes('integer').columns
+
+    df[fcols] = df[fcols].apply(pd.to_numeric, downcast='float')
+    df[icols] = df[icols].apply(pd.to_numeric, downcast='integer')
+
+    return df
