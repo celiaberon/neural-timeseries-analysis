@@ -2,14 +2,13 @@
 @author: celiaberon
 '''
 
+import gc
 from functools import partial
 
 import numpy as np
 import pandas as pd
 
 from nta.events.quantify import group_peak_metrics
-
-# from scipy import stats as st
 
 
 def get_event_indices(timeseries: pd.DataFrame,
@@ -89,7 +88,7 @@ def align_single_trace(idx: int,
     try:
         # Get list of indices from timeseries to pull aligned photometry trace
         idcs = window_interp + idx
-        if ts.loc[idcs, 'session'].nunique() != 1:
+        if ts.loc[idcs, 'Session'].nunique() != 1:
             return np.nan  # don't allow crossing session boundaries
         trace = ts.loc[idcs, y_col].values
         return np.nan if np.any(np.isnan(trace.astype('float'))) else trace
@@ -124,7 +123,7 @@ def get_sampling_freq(timestamps):
               .reset_index(drop=True)
               .diff()
               .dropna()
-              .astype('float64')
+              .astype('float32')
               .round(6))
     tsteps_consistency = (tsteps
                           .value_counts(normalize=True)
@@ -181,8 +180,8 @@ def align_photometry_to_event(trials: pd.DataFrame,
 
     # Ensure that our photometry timeseries has unbroken trial continuity.
     if not ignore_precautions:
-        if ts_full.session.nunique() > 1:
-            assert ts_full.groupby('session').nTrial.diff().max() == 1, (
+        if ts_full.Session.nunique() > 1:
+            assert ts_full.groupby('Session', observed=False).nTrial.diff().max() == 1, (
                 'Found discontinuous trial IDs, cannot extract traces'
             )
         else:
@@ -209,6 +208,9 @@ def align_photometry_to_event(trials: pd.DataFrame,
         print(f'using provided sampling frequency {fs} Hz')
     window_interp, timesteps = interpolate_window(window, fs)
 
+    times_col = f'{aligned_event}_times'  # channel independent
+    trials_[times_col] = [timesteps] * len(trials_)
+
     for ch in channel:
         # Need full unbroken timeseries of photometry data to properly address
         # trial continuity.
@@ -218,11 +220,10 @@ def align_photometry_to_event(trials: pd.DataFrame,
                               y_col=ch)
 
         photo_col = f'{aligned_event}_{ch}'
-        times_col = f'{aligned_event}_{ch}_times'
 
         # Initialize as NaNs to handle trials without epoch.
         trials_[photo_col] = np.nan
-        trials_[times_col] = np.nan
+        # trials_[times_col] = np.nan
 
         # Store snippet of photometry data alongside trial data.
         trials_[photo_col] = (trials_['nTrial']
@@ -231,11 +232,11 @@ def align_photometry_to_event(trials: pd.DataFrame,
 
         # Map times into full trial table only for trials with complete
         # photometry snippets.
-        trials_w_data = trials_.dropna(subset=[photo_col]).copy()
-        trials_w_data[times_col] = [timesteps] * len(trials_w_data)
-        trials_[times_col] = (trials_['nTrial']
-                              .map(trials_w_data
-                                   .set_index('nTrial')[times_col]))
+        # trials_w_data = trials_.dropna(subset=[photo_col]).copy()
+        # trials_w_data[times_col] = [timesteps] * len(trials_w_data)
+        # trials_[times_col] = (trials_['nTrial']
+        #                       .map(trials_w_data
+        #                            .set_index('nTrial')[times_col]))
 
         if len(trials_.dropna(subset=photo_col)) == 0:
             continue
@@ -248,6 +249,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
                                          agg_funcs=['mean', 'min', 'max'],
                                          offset=False)
 
+    gc.collect()
     return trials_
 
 
@@ -280,8 +282,8 @@ def interpolate_window(window: tuple[int | float, int | float] = (1, 3),
 
     # Intrpolate numbere of steps across window (as base for indexing).
     window_interp = np.arange(-pre_window, post_window + 1)
-    timesteps = window_interp / fs  # convert to units of seconds
-
+    timesteps = np.round(window_interp / fs, 3)  # convert to units of seconds
+    timesteps = timesteps.astype('float32')
     return window_interp, timesteps
 
 
@@ -439,7 +441,7 @@ def trials_by_time_array(trials: pd.DataFrame,
 
     # Drop trials that don't have photometry data.
     photo_col = f'{align_event}_{channel}'
-    time_col = f'{align_event}_{channel}_times'
+    time_col = f'{align_event}_times'
 
     all_photo_cols = [col for col in trials.columns if f'_{channel}' in col]
     trials_clean = (trials.copy()
@@ -516,7 +518,7 @@ def sort_by_trial_type(trials: pd.DataFrame,
     # Sort neural traces as timeseries to match trial table.
     stacked_ts_traces = stacked_ts_traces[idx_sorted]
     trials_sorted['ngroup'] = (trials_sorted
-                               .groupby(task_variable, sort=False)
+                               .groupby(task_variable, sort=False, observed=False)
                                .ngroup()
                                )
     return trials_sorted, stacked_ts_traces
