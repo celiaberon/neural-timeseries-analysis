@@ -1,3 +1,4 @@
+import gc
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -6,10 +7,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-import nta.preprocessing.quality_control as qc
-from nta.features import behavior_features as bf
-from nta.features.design_mat import make_design_mat
-from nta.utils import downcast_all_numeric, load_config_variables
+from ..features import behavior_features as bf
+from ..features.design_mat import make_design_mat
+from ..preprocessing import quality_control as qc
+from ..utils import (cast_object_to_category, downcast_all_numeric,
+                     load_config_variables)
 
 
 class DataSet(ABC):
@@ -22,7 +24,7 @@ class DataSet(ABC):
                  label: str = '',
                  save: bool = True,
                  col_grp: str = 'minimal',
-                 add_cols: set[str] = {}):
+                 add_cols: dict[set] = {}):
 
         # if not isinstance(mice, list):
         #     mice = [mice]
@@ -31,7 +33,8 @@ class DataSet(ABC):
         self.qc_photo = qc_photo
         self.label = label if label else self.mice
         self.col_grp = col_grp
-        self.add_cols = add_cols
+        self.ts_add_cols = add_cols.get('ts', set())
+        self.trls_add_cols = add_cols.get('trials', set())
 
         self.root = self.set_root()
         self.data_path = self.set_data_path()
@@ -60,6 +63,8 @@ class DataSet(ABC):
         # Downcast datatypes to make processing on dataset more memory efficient.
         self.trials = downcast_all_numeric(self.trials)
         self.ts = downcast_all_numeric(self.ts)
+        self.ts = cast_object_to_category(self.ts)
+        self.trials = cast_object_to_category(self.trials)
 
     @abstractmethod
     def set_root(self):
@@ -108,20 +113,15 @@ class DataSet(ABC):
         ts = bf.split_penalty_states(ts, penalty='ENLP')
         ts = bf.split_penalty_states(ts, penalty='CueP')
 
-        if self.col_grp == 'minimal':
-            cols_to_drop = {'system_nTrial', 'raw_grnR', 'raw_grnL',
-                            'detrend_grnR', 'detrend_grnL', 'outcome_licks',
-                            'trial_clock', 'TO', 'nENL', 'iBlock',
-                            'state_ENLP', 'ENLP', 'CueP', 'stateConsumption',
-                            'session'} & set(ts.columns)
-            col_to_drop = list(cols_to_drop - self.add_cols)
-            ts = ts.drop(columns=col_to_drop)
-
         return trials, ts
 
     def custom_update_columns(self, trials, ts):
         '''Column updates that are dataset-specific.'''
         return trials, ts
+
+    def cleanup_cols(self, df_dict):
+
+        return df_dict
 
     def set_timeseries_path(self):
         '''Set path to timeseries data file.'''
@@ -145,37 +145,31 @@ class DataSet(ABC):
             return None, None
 
         trial_dtypes = {'nTrial': np.int32,
-                       'Mouse': 'object',
-                       'Date': 'object',
-                       'Session': 'object',
-                       'Condition': np.int16,
-                       'sSelection': np.int8,
-                       'tSelection': np.int16,
-                       'direction': np.float32,
-                       'Reward': np.float32,
-                       'T_Reward': np.float32,
-                       'T_ENL': np.int16,
-                       'n_ENL': np.int8,
-                       'n_Cue': np.int8,
-                       'State': np.float32,
-                       'selHigh': np.float32,
-                       'iBlock': np.int8,
-                       'iInBlock': np.int8,
-                       'blockLength': np.int8,
-                       'flag_block': 'bool',
-                       'timeout_block': 'bool',
-                       'timeout_thresh': np.float32,
-                       'timeout': 'bool',
-                       'Switch': np.float32}
+                        'Mouse': 'object',
+                        'Date': 'object',
+                        'Session': 'object',
+                        'Condition': np.int16,
+                        'sSelection': np.int8,
+                        'tSelection': np.int16,
+                        'direction': np.float32,
+                        'Reward': np.float32,
+                        'T_Reward': np.float32,
+                        'T_ENL': np.int16,
+                        'n_ENL': np.int8,
+                        'n_Cue': np.int8,
+                        'State': np.float32,
+                        'selHigh': np.float32,
+                        'iBlock': np.int8,
+                        'blockLength': np.int8,
+                        'iInBlock': np.int8,
+                        'flag_block': 'bool',
+                        'timeout_block': 'bool',
+                        'timeout_thresh': 'object',
+                        'timeout': 'bool',
+                        'Switch': np.float32}
 
         ts_dtypes = {
-                    #  'detrend_grnR': np.float32,
-                    #  'raw_grnR': np.float32,
-                    #  'detrend_grnL': np.float32,
                      'session_clock': np.float32,
-                    #  'raw_grnL': np.float32,
-                    #  'z_grnR': np.float32,
-                    #  'z_grnL': np.float32,
                      'nTrial': np.int32,
                      'iBlock': np.float32,
                      'nENL': np.float32,
@@ -191,7 +185,6 @@ class DataSet(ABC):
                      'outcome_licks': np.int8,
                      'Consumption': np.int8,
                      'state_ENLP': np.int8,
-                    #  'state_CueP': np.int8,
                      'session': 'object',
                      'trial_clock': np.float32,
                      'fs': np.float32}
@@ -286,6 +279,8 @@ class DataSet(ABC):
                 ss_vals['nTrial_orig'] = ss_vals['nTrial'].copy()
 
             # Create session column to match across dataframes.
+            if 'session' in ss_vals.columns:
+                ss_vals = ss_vals.rename(columns={'session': 'Session'})
             if 'Session' not in ss_vals.columns:
                 ss_vals['Session'] = '_'.join([self.mouse_, self.session_])
 
@@ -368,10 +363,14 @@ class DataSet(ABC):
                                                    allow_discontinuity=False,
                                                    drop_enlP=False)
 
+            trials_matched = self.cleanup_cols(trials_matched)
+
             multi_sessions = self.concat_sessions(sub_sessions=trials_matched,
                                                   full_sessions=multi_sessions)
 
         # TODO: QC all mice sessions by ENL penalty rate set per mouse
+
+        gc.collect()
 
         return multi_sessions
 
@@ -471,6 +470,27 @@ class StandardData(DataSet):
     def set_channels(self):
         channels = {'z_grnL', 'z_grnR'}
         return channels
+
+    def cleanup_cols(self, df_dict):
+
+        if self.col_grp == 'minimal':
+            # Drop columns that aren't typically accessed for analysis.
+            cols_to_drop = {'system_nTrial', 'raw_grnR', 'raw_grnL',
+                            'detrend_grnR', 'detrend_grnL', 'outcome_licks',
+                            'trial_clock', 'TO', 'nENL', 'iBlock',
+                            'state_ENLP', 'ENLP', 'CueP', 'stateConsumption',
+                            } & set( df_dict['ts'].columns)
+            cols_to_drop = list(cols_to_drop - self.ts_add_cols)
+            df_dict['ts'] = df_dict['ts'].drop(columns=cols_to_drop)
+
+            cols_to_drop = {'k1', 'k2', 'k3', 'timeout_block', '+1seq2',
+                            'timeout_thresh', 'RL_seq2', 'RL_seq3', '-1seq3',
+                            '+1seq3', 'T_Reward'
+                            } & set(df_dict['trials'].columns)
+            col_to_drop = list(cols_to_drop - self.trls_add_cols)
+            df_dict['trials'] = df_dict['trials'].drop(columns=col_to_drop)
+
+        return df_dict
 
 
 class DeterministicData(DataSet):
