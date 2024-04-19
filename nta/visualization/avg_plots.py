@@ -120,7 +120,7 @@ def subsample_trial_types(trials: pd.DataFrame,
     if (target_size is None) or (min_trial_type < target_size):
         target_size = min_trial_type
 
-    subsampled_trials = trials_.groupby(column).sample(n=target_size)
+    subsampled_trials = trials_.groupby(column, observed=False).sample(n=target_size)
 
     return subsampled_trials
 
@@ -232,7 +232,7 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
     # mean.
     lineplot_core = partial(sns.lineplot,
                             data=ts,
-                            x=f'{y_col}_times',
+                            x=f'{y_col.split("_")[0]}_times',
                             y=y_col,
                             hue=column,
                             ax=ax1)
@@ -303,7 +303,7 @@ def plotting_wrapper(trials: pd.DataFrame,
         exploded_trials = (trials.copy()
                            .dropna(subset=[photometry_column])
                            .explode(column=[photometry_column,
-                                            f'{event}_{channel}_times'])
+                                            f'{event}_times'])
                            )
         fig, axs = plot_trial_type_comparison(exploded_trials,
                                               align_event=event,

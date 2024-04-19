@@ -130,8 +130,8 @@ def exclude_outliers(peaks, x_col, y_col):
         return (column > lower_bound) & (column < upper_bound)
 
     peaks_ = peaks.dropna(subset=[y_col]).copy()
-    peaks_.groupby(x_col)[y_col].agg([get_num_outliers])
-    peaks_ = (peaks_.loc[peaks_.groupby(x_col, group_keys=False)[y_col]
+    peaks_.groupby(x_col, observed=False)[y_col].agg([get_num_outliers])
+    peaks_ = (peaks_.loc[peaks_.groupby(x_col, group_keys=False, observed=False)[y_col]
                                .apply(not_outlier)]
                     .reset_index(drop=True))
 
@@ -172,7 +172,6 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 
     ax_modifiers = {0: 'no ', 1: ''}
     for state in states:
-
         if (state != 'Consumption') or ignore_reward:
             metric = metrics[state]
             y_col = f'{state}_{channel}_{metric}'
