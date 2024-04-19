@@ -3,6 +3,7 @@ Created on Fri Aug 12 13:30:18 2022
 
 @author: celiaberon
 """
+import gc
 import itertools
 from collections import defaultdict
 from typing import Callable
@@ -83,7 +84,7 @@ def find_group_peak_time(ts: pd.DataFrame,
                          peak_func: Callable,
                          times_col: str,
                          channel_col: str,
-                         max_peak_delay: float = 0.5):
+                         max_peak_delay: float = None):
 
     '''
     Use the aggregate (mean) trace for a trial type to find the location (in
@@ -106,6 +107,13 @@ def find_group_peak_time(ts: pd.DataFrame,
         peak_time:
             Time (in seconds) of the average peak for the given trial type.
     '''
+    event_lags = {'Cue': 0.3,  # Cue delay shorter to not overlap Consumption
+                  'Consumption': 0.5
+                  }
+
+    if max_peak_delay is None:
+        event = times_col.split('_')[0]
+        max_peak_delay = event_lags.get(event)
 
     # Find group mean peak time to use for trial peak calculations.
     ts_peak_time_window = ts.loc[ts[times_col].between(0, max_peak_delay)]
@@ -168,16 +176,17 @@ def group_peak_metrics(trials: pd.DataFrame,
     for state in states:
 
         channel_col = f'{state}_{channel}'
-        times_col = f'{state}_{channel}_times'
+        times_col = f'{state}_times'
 
         # Convert to longform timeseries and drop NaNs from grouping columns.
         exp_trials = (trials_
+                      .dropna(subset=channel_col)
                       .explode(column=[channel_col, times_col])
-                      .dropna(subset=grouping_levels + ['Reward', channel_col]))
+                      .dropna(subset=grouping_levels + ['Reward']))
         exp_trials = create_combo_col(exp_trials, grouping_levels)
 
         # Iterate over each unique condition.
-        for peak_group_id, peak_group in exp_trials.groupby('combo_col'):
+        for peak_group_id, peak_group in exp_trials.groupby('combo_col', observed=False):
 
             # Iterate over each reward outcome in condition and use
             # appropriate function to detect peak for group, storing mean
@@ -257,10 +266,14 @@ def group_peak_quantification(trials: pd.DataFrame,
     T_BASELINE = -0.04
 
     channel_col = f'{state}_{channel}'
-    times_col = f'{state}_{channel}_times'
+    times_col = f'{state}_times'
+
+    idx = (np.abs(trials[times_col].dropna().iloc[0] - T_BASELINE)).argmin()
+    T_BASELINE = trials[times_col].dropna().iloc[0][idx]
 
     trials_ = trials.copy()
     exp_trials = (trials_
+                  .dropna(subset=[channel_col])
                   .explode(column=[channel_col, times_col])
                   .reset_index(drop=True))
 
@@ -286,18 +299,20 @@ def group_peak_quantification(trials: pd.DataFrame,
         # Add column to trial data mapping peak metric for each trial.
         trials_ = trials_.merge(agg_df, left_on='nTrial',
                                 right_index=True, how='left')
-        trials_[peak_col] = trials_[peak_col].astype('float')
+        trials_[peak_col] = trials_[peak_col].astype('float32')
 
     if offset:
         # At the moment offset everything by timepoint preceding cue.
-        if (state != 'Cue') and ('Cue_offset' in exp_trials.columns):
-            trials_[peak_col] = trials_[peak_col] - trials_['Cue_offset']
+        if (state != 'Cue') and (f'Cue_{channel}_offset' in exp_trials.columns):
+            trials_[peak_col] = trials_[peak_col] - trials_[f'Cue_{channel}_offset']
         else:
             offset_df = (exp_trials.loc[exp_trials[times_col] == T_BASELINE]
                          .set_index('nTrial')[[channel_col]]
-                         .rename(columns={channel_col: f'{state}_offset'}))
+                         .rename(columns={channel_col: f'{state}_{channel}_offset'}))
             trials_ = trials_.merge(offset_df, left_on='nTrial',
                                     right_index=True, how='left')
-            trials_[peak_col] -= trials_[f'{state}_offset']
+            trials_[peak_col] -= trials_[f'{state}_{channel}_offset']
+
+    gc.collect()
 
     return trials_
