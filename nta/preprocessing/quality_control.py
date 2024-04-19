@@ -85,10 +85,10 @@ def QC_enl_penalty_rate(trials: pd.DataFrame) -> list:
     trials_['Date'] = pd.to_datetime(trials_['Date'], format='%Y_%m_%d')
     penalties = (trials_
                  .sort_values(by='Date')
-                 .groupby(['Mouse', 'Date', 'Session'], as_index=False)
+                 .groupby(['Mouse', 'Date', 'Session'], as_index=False, observed=False)
                  .penalty.mean())
 
-    for mouse, mouse_penalties in penalties.groupby('Mouse'):
+    for mouse, mouse_penalties in penalties.groupby('Mouse', observed=False):
         late_dates = np.sort(mouse_penalties.Date.unique())[-6:]
         late_sessions = mouse_penalties.query('Date.isin(@late_dates)')
         late_sessions_mean = np.nanmean(late_sessions['penalty'])
@@ -105,7 +105,7 @@ def QC_enl_penalty_rate(trials: pd.DataFrame) -> list:
 def get_sess_val(trials, trial_variable):
 
     val = (trials
-           .groupby('Session')
+           .groupby('Session', observed=False)
            .apply(lambda x: x[trial_variable].unique())
            .squeeze().item())
 

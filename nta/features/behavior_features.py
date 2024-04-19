@@ -42,10 +42,10 @@ def shift_trial_feature(trials: pd.DataFrame,
 
     if shift_forward:
         # Use (-) for trial histories (N trials back from current trial).
-        trials_[f'-{n_shift}{new_col}'] = trials_.groupby('Session')[col].shift(n_shift)
+        trials_[f'-{n_shift}{new_col}'] = trials_.groupby('Session', observed=False)[col].shift(n_shift)
     else:
         # Use (+) for subsequent trials (N trials forward from current).
-        trials_[f'+{n_shift}{new_col}'] = trials_.groupby('Session')[col].shift(-n_shift)
+        trials_[f'+{n_shift}{new_col}'] = trials_.groupby('Session', observed=False)[col].shift(-n_shift)
 
     return trials_
 
@@ -201,7 +201,7 @@ def get_reward_seq(trials: pd.DataFrame) -> pd.DataFrame:
 
     # If sequence incomplete (doesn't have fully defined history), use NaNs.
     inc_seq = (trials_
-               .groupby('Session')['nTrial']
+               .groupby('Session', observed=False)['nTrial']
                .nth(slice(0, 3)).values)
     trials_.loc[trials_.nTrial.isin(inc_seq), ['rew_seq', 'loss_seq']] = np.nan
 
@@ -444,7 +444,7 @@ def order_sessions(trials):
     t_ = trials.copy()
     t_['Date'] = pd.to_datetime(t_['Date'], format='%Y_%m_%d')
 
-    for mouse, m_dates in t_.groupby('Mouse'):
+    for mouse, m_dates in t_.groupby('Mouse', observed=False):
         sorted_dates = np.sort(m_dates.Date.unique())
         sorted_dates = {date: i for i, date in enumerate(sorted_dates)}
         t_.loc[t_['Mouse'] == mouse, 'session_order'] = m_dates['Date'].map(sorted_dates)

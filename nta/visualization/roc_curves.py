@@ -84,7 +84,7 @@ def calc_dprime_sample(*,
 
     # Store distribution of neural events within each class of pred_behavior.
     neural_dists_by_class = np.zeros((2, len(balanced_data) // 2))
-    for i, grp in balanced_data.groupby(pred_behavior):
+    for i, grp in balanced_data.groupby(pred_behavior, observed=False):
         neural_dists_by_class[i, :] = grp[neural_event].values
 
     # Calculate dprime between two class-defined distributions of neural
@@ -256,7 +256,7 @@ def multiclass_roc_curves(trials: pd.DataFrame,
     '''
 
     ax = None
-    for i, (key, grp) in enumerate(trials.groupby(trial_type, dropna=True)):
+    for i, (key, grp) in enumerate(trials.groupby(trial_type, dropna=True, observed=False)):
 
         if isinstance(neural_event, dict):
             ne = neural_event.get(key)

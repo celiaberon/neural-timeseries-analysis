@@ -129,7 +129,7 @@ def write_metadata_lineplots(*args, **kwargs):
 
     # Number of sessions per mouse.
     sess_per_mouse = np.array(exploded_trials
-                              .groupby("Mouse", as_index=False)["Session"]
+                              .groupby("Mouse", as_index=False, observed=False)["Session"]
                               .nunique())
     grp_on = (kwargs.get('column')
               if not kwargs.get('ls_col', False)
@@ -137,7 +137,7 @@ def write_metadata_lineplots(*args, **kwargs):
 
     # Number of trials per condition (trace) in plot.
     trials_per_cond = np.array(exploded_trials
-                               .groupby(grp_on, as_index=False)["nTrial"]
+                               .groupby(grp_on, as_index=False, observed=False)["nTrial"]
                                .nunique(), dtype='str')
 
     metadata = [f'filename = {fname}',
@@ -169,13 +169,13 @@ def write_metadata_peak_plots(*args, **kwargs):
 
     # Number of sessions per mouse.
     sess_per_mouse = np.array(peaks
-                              .groupby("Mouse", as_index=False)["Session"]
+                              .groupby("Mouse", as_index=False, observed=False)["Session"]
                               .nunique())
 
     # Number of trials per condition (trace) in plot.
     grp_on = ['Reward', kwargs.get('x_col')]
     trials_per_cond = np.array(peaks
-                               .groupby(grp_on, as_index=False)["nTrial"]
+                               .groupby(grp_on, as_index=False, observed=False)["nTrial"]
                                .nunique(), dtype='str')
 
     metadata = [f'filename = {fname}',
@@ -206,13 +206,13 @@ def write_metadata_roc(*args, **kwargs):
 
     # Number of sessions per mouse.
     sess_per_mouse = np.array(trials
-                              .groupby("Mouse", as_index=False)["Session"]
+                              .groupby("Mouse", as_index=False, observed=False)["Session"]
                               .nunique())
 
     # Number of trials per condition (trace) in plot.
     grp_on = [kwargs.get('trial_type', 'Reward'), kwargs.get('pred_behavior')]
     trials_per_cond = np.array(trials
-                               .groupby(grp_on, as_index=False)["nTrial"]
+                               .groupby(grp_on, as_index=False, observed=False)["nTrial"]
                                .nunique(), dtype='str')
 
     metadata = [f'filename = {fname}',
@@ -244,5 +244,14 @@ def downcast_all_numeric(df):
 
     df[fcols] = df[fcols].apply(pd.to_numeric, downcast='float')
     df[icols] = df[icols].apply(pd.to_numeric, downcast='integer')
+
+    return df
+
+
+def cast_object_to_category(df):
+
+    cols = df.select_dtypes('object').columns
+    for col in cols:
+        df[col] = df[col].astype('category')
 
     return df
