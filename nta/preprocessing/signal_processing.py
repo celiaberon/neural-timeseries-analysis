@@ -234,6 +234,25 @@ def rolling_demodulation(trace: np.array,
     return rolling_demod, t_
 
 
+def find_suitable_params(orig_fs, carrier_freqs, search_range=(930, 960),
+                         final_fs=50):
+
+    if isinstance(search_range, tuple):
+        search_range = range(*search_range)
+
+    cf_params = {cf: {} for cf in carrier_freqs}
+    for cf in carrier_freqs:
+        error = []
+        for nperseg in search_range:
+            freq_res = orig_fs / nperseg
+            error.append(np.min(np.abs(cf - (np.arange(0, 2*cf + 1, step=freq_res)))))
+        cf_params[cf]['error'] = np.min(error)
+        cf_params[cf]['nperseg'] = search_range[np.where(error == np.min(error))[0][0]]
+        cf_params[cf]['noverlap'] = cf_params[cf]['nperseg'] - (orig_fs / final_fs)
+
+    return cf_params
+
+
 def process_trace(raw_photoms: list[np.array],
                   carriers: list[int | float],
                   labels: list[str],
