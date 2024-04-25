@@ -114,7 +114,6 @@ def get_sampling_freq(timestamps):
             Sampling frequency (in Hz) of the timeseries.
     '''
     if not isinstance(timestamps, pd.Series):
-        # tstep = st.mode(np.diff(timestamps), keepdims=False)[0].squeeze()
         tstamps = pd.Series(timestamps)
     else:
         tstamps = timestamps.copy()
@@ -124,15 +123,25 @@ def get_sampling_freq(timestamps):
               .diff()
               .dropna()
               .astype('float32')
-              .round(6))
+              .round(5))
+
+    tsteps = tsteps.where(abs(tsteps) < 0.2).dropna()
     tsteps_consistency = (tsteps
                           .value_counts(normalize=True)
                           .max())
 
-    assert tsteps_consistency > 0.99, 'multiple sampling rates detected'
-
-    tstep = tsteps.mode().squeeze()
-    fs = 1 / tstep
+    if tsteps_consistency < 0.99:
+        print('multiple sampling rates detected')
+        is_close = round(tsteps.max() - tsteps.min(), 3) <= 0.001
+        low_err = (tsteps.var() / tsteps.mean()) < 1e-4
+        if not (is_close and low_err):
+            raise ValueError('cannot reconcile multiple sampling rates')
+        tstep = round(tsteps.mean(), 5)
+        fs = round(1 / tstep, 5)
+        print(f'mean fs = {fs}')
+    else:
+        tstep = round(tsteps.mode().squeeze(), 5)
+        fs = round(1 / tstep, 5)
 
     return tstep, fs
 
@@ -223,20 +232,11 @@ def align_photometry_to_event(trials: pd.DataFrame,
 
         # Initialize as NaNs to handle trials without epoch.
         trials_[photo_col] = np.nan
-        # trials_[times_col] = np.nan
 
         # Store snippet of photometry data alongside trial data.
         trials_[photo_col] = (trials_['nTrial']
                               .apply(lambda i: align_trace(idx=idx
                                                            .get(i, None))))
-
-        # Map times into full trial table only for trials with complete
-        # photometry snippets.
-        # trials_w_data = trials_.dropna(subset=[photo_col]).copy()
-        # trials_w_data[times_col] = [timesteps] * len(trials_w_data)
-        # trials_[times_col] = (trials_['nTrial']
-        #                       .map(trials_w_data
-        #                            .set_index('nTrial')[times_col]))
 
         if len(trials_.dropna(subset=photo_col)) == 0:
             continue
@@ -405,7 +405,7 @@ def trials_by_time_array(trials: pd.DataFrame,
                          channel: str,
                          align_event: str,
                          win: tuple[int | float, int | float] = None,
-                         fs: int = None):
+                         ):
 
     '''
     Create simple array containing event-aligned neural traces stacked by
@@ -452,18 +452,11 @@ def trials_by_time_array(trials: pd.DataFrame,
 
     # Stack event-aligned timeseries into array: timepoints x trials.
     exploded_trials = trials_clean.explode(column=[photo_col, time_col])
-    if fs is None:
-        # Calculate sampling frequency on one sample trial.
-        tstep, fs = get_sampling_freq(exploded_trials[time_col])
-        print(f'no sampling frequency provided, using {round(fs, 2)} Hz')
-    else:
-        print(f'using provided sampling frequency {fs} Hz')
 
     if win:
         within_window = exploded_trials[time_col].between(-win[0], win[1],
                                                           inclusive='both')
         exploded_trials = exploded_trials.loc[within_window]
-        # n_timepoints = len(np.arange(-win[0], win[1] + tstep, step=tstep))
         n_timepoints = (exploded_trials
                         .groupby('nTrial')[time_col]
                         .count().unique().squeeze())

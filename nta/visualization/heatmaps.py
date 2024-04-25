@@ -49,7 +49,7 @@ def add_relative_timing_columns(timeseries: pd.DataFrame,
     # in lengths between true and effective consumption states.
     lick_delay = (timeseries
                   .groupby('nTrial', as_index=False)
-                  .agg({'Consumption': np.sum, 'stateConsumption': np.sum}))
+                  .agg({'Consumption': 'sum', 'stateConsumption': 'sum'}))
     lick_delay['t_sel_to_cons'] = (lick_delay.stateConsumption
                                    - lick_delay.Consumption) * (1 / fs)
 
@@ -326,6 +326,7 @@ def center_xticks_around_zero(tstamps: list,
 def plot_heatmap(heatmap_array: np.array,
                  align_event: str,
                  *,
+                 fs: int | float = None,
                  tstamps: list = None,
                  ax=None,
                  hm_kwargs=None,
@@ -360,7 +361,7 @@ def plot_heatmap(heatmap_array: np.array,
     np.random.seed(0)  # seed for consistent subsampling.
 
     # Convert window boundaries from time (secs) to index points for x-axis.
-    tstep, fs = get_sampling_freq(tstamps)
+    tstep = round(1/fs, 4)
 
     # Alignment errors if window length dims not specified properly.
     assert len(tstamps) == heatmap_array.shape[1]
@@ -430,6 +431,7 @@ def create_scaled_colorbar(fig, axs, vmin: float, vmax: float):
 
 
 def plot_heatmap_wrapper(trials: pd.DataFrame,
+                         fs: int | float,
                          *,
                          alignment_states: list = None,
                          channel: str = None,
@@ -474,6 +476,8 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
     if figsize is None:
         figsize = (3. * len(alignment_states), 2.0)
 
+    tstep = round(1/fs, 4)
+
     fig, axs = plt.subplots(ncols=len(alignment_states),
                             figsize=figsize,
                             sharey=True,
@@ -509,13 +513,11 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
                           align_event=state,
                           task_variable=task_variable,
                           tstamps=timestamps,
+                          fs=fs,
                           ax=ax,
                           include_label=i < 1,
                           hm_kwargs={'vmin': vmin, 'vmax': vmax},
                           **kwargs)
-
-        # Convert window boundaries from time (secs) to idx points for x-axis.
-        tstep, fs = get_sampling_freq(timestamps)
 
         # Overlay scatterplot of behavior events for each trial's timeseries.
         ax, scatter_labels = scatter_behavior_events(trials_, ax, state, win,
