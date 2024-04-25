@@ -66,6 +66,8 @@ class DataSet(ABC):
         self.ts = cast_object_to_category(self.ts)
         self.trials = cast_object_to_category(self.trials)
 
+        self.get_sampling_freq()
+
     @abstractmethod
     def set_root(self):
         '''Sets the root path for the dataset'''
@@ -431,15 +433,25 @@ class DataSet(ABC):
                   .diff()
                   .dropna()
                   .astype('float32')
-                  .round(6))
+                  .round(5))
+
+        tsteps = tsteps.where(abs(tsteps) < 0.2).dropna()
         tsteps_consistency = (tsteps
                               .value_counts(normalize=True)
                               .max())
 
-        assert tsteps_consistency > 0.99, 'multiple sampling rates detected'
-
-        self.tstep = tsteps.mode().squeeze()
-        self.fs = 1 / self.tstep
+        if tsteps_consistency < 0.99:
+            print('multiple sampling rates detected')
+            is_close = (tsteps.max() - tsteps.min()) < 0.001
+            low_err = tsteps.var() / tsteps.mean()
+            if not (is_close and low_err):
+                raise ValueError('cannot reconcile multiple sampling rates')
+            self.tstep = round(tsteps.mean(), 5)
+            self.fs = round(1 / self.tstep, 5)
+            print(f'mean fs = {self.fs}')
+        else:
+            self.tstep = round(tsteps.mode().squeeze(), 5)
+            self.fs = round(1 / self.tstep, 5)
 
 
 class StandardData(DataSet):
