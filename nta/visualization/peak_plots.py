@@ -96,16 +96,23 @@ def plot_and_recolor(plot_func,
     return ax
 
 
-def set_color_palette(peaks, x_col, palette=None, **kwargs):
+def set_color_palette(peaks, x_col, palette=None, hue=None, **kwargs):
 
-    labels = np.sort(peaks[x_col].dropna().unique())
+    if hue is None:
+        hue_col = x_col
+    else:
+        hue_col = hue
+
+    labels = np.sort(peaks[hue_col].dropna().unique())
     match palette:
         case dict():
             labels = palette.keys()
         case str():
-            palette = sns.color_palette(palette)
+            palette = sns.color_palette(palette, n_colors=len(labels))
         case None:
             palette = None
+        case list():
+            palette = dict(zip(labels, palette))
         case _:
             palette = sns.color_palette('RdBu', n_colors=len(labels))
             palette = dict(zip(labels, palette))
