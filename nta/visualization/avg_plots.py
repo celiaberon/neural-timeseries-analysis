@@ -6,7 +6,6 @@ Created on Mon Jan 17 15:22:38 2022
 @author: celiaberon
 """
 
-# import os
 from functools import partial
 
 import matplotlib as mpl
@@ -16,8 +15,8 @@ import pandas as pd
 import seaborn as sns
 from pandas.api.types import is_numeric_dtype
 
-from nta.events.align import get_lick_times
-from nta.utils import save_plot_metadata
+from ..events.align import get_lick_times
+from ..utils import save_plot_metadata
 
 
 def set_new_axes(n_iters: list,
