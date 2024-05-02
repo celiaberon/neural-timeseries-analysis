@@ -5,7 +5,7 @@
 import numpy as np
 import pandas as pd
 
-from nta.utils import single_session
+from ..utils import single_session
 
 
 def shift_trial_feature(trials: pd.DataFrame,
@@ -46,6 +46,42 @@ def shift_trial_feature(trials: pd.DataFrame,
     else:
         # Use (+) for subsequent trials (N trials forward from current).
         trials_[f'+{n_shift}{new_col}'] = trials_.groupby('Session', observed=False)[col].shift(-n_shift)
+
+    return trials_
+
+
+def shift_trial_with_cleanup(trials, col, shift=1, new_col=None):
+
+    '''
+    Shift feature value relative to trial label in multi-session dataframe. Can
+    be applied with broken trial continuity.
+
+    Args:
+        trials:
+            Trial-based dataframe, rows for trials and columns for features.
+        col:
+            Column to shift.
+        shift:
+            Number of trials by which to shift `col`. Positive shifts forward
+            (such that associated value corresponds to previous trial).
+        new_col:
+            New column label.
+
+    Returns:
+        trials_:
+            Trial table containing `new_col` as a shifted version of `col`.
+    '''
+
+    trials_ = trials.copy()
+
+    if new_col is None:
+        prefix = f'prev{abs(shift)}_' if shift > 0 else f'next{abs(shift)}_'
+        new_col = prefix + col
+
+    trials_[new_col] = trials_.groupby('Session', observed=False)[col].shift(shift)
+
+    # Find discontinuous trials within session and prevent shift mislabeling.
+    trials_.loc[trials_.groupby('Session', observed=False).nTrial.diff() > 1, new_col] = np.nan
 
     return trials_
 
@@ -352,6 +388,59 @@ def map_sess_variable(trials: pd.DataFrame, ref_df: pd.DataFrame,
     return trials_
 
 
+def apply_trial_rep_threshold(trials, col, min_reps=100, by_outcome=False):
+
+    '''
+    Filter trial type labels that don't meet occurrence threshold. Leaves trial
+    data in place within trial table, but replaces low-replicate trial types
+    for a given variable with NaN.
+    Note: used for discrete quantitative variables to clip tails (but does not
+    check that all intermediates meet threshold).
+
+    Args:
+        trials:
+            Trial table with row for each trial, column for each feature.
+        col:
+            Feature to filter low frequency instances from.
+        min_reps:
+            Minimum number of trials for each instance of a variable.
+        by_outcome:
+            If true, independently finds bounds for rewarded and unrewarded
+            trials.
+
+    Returns:
+        trials_:
+            Trial table where `col` contains NaNs for values that occur fewer
+            than min_reps times (per outcome or not).
+    '''
+
+    trials_ = trials.copy()
+    if by_outcome:
+        outcomes = [[0], [1]]
+    else:
+        outcomes = [[0, 1]]  # fake it if not splitting counts by outcome
+
+    for outcome in outcomes:
+
+        llim = (trials_
+                .query(f'Reward.isin({outcome})')
+                .groupby(col)
+                .filter(lambda x: len(x) > min_reps)[col]
+                .min())
+        ulim = (trials_
+                .query(f'Reward.isin({outcome})')
+                .groupby(col)
+                .filter(lambda x: len(x) > min_reps)[col]
+                .max())
+        print(llim, ulim)
+
+        mask = ((trials_['Reward'].isin(outcome))
+                & ((trials_[col] < llim) | (trials_[col] > ulim)))
+        trials_.loc[mask, col] = np.nan
+
+    return trials_
+
+
 def split_penalty_states(ts, penalty='ENLP'):
 
     '''
@@ -450,6 +539,7 @@ def order_sessions(trials):
         t_.loc[t_['Mouse'] == mouse, 'session_order'] = m_dates['Date'].map(sorted_dates)
 
     return t_
+
 
 def add_behavior_cols(trials: pd.DataFrame,
                       timeseries: pd.DataFrame = None,
