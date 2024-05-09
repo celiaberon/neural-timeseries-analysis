@@ -68,7 +68,7 @@ def resample_and_balance(trial_data: pd.DataFrame,
     imbalanced_data = (trial_data
                        .copy()
                        .dropna(subset=[trial_type] + necessary_cols)
-                       .groupby(trial_type, observed=False))
+                       .groupby(trial_type))
 
     check_group_size(imbalanced_data, n_samples=n_samples)
 
@@ -105,7 +105,7 @@ def subsample_trial_types(trials: pd.DataFrame,
     grp_trials = (trials
                   .copy()
                   .reset_index(drop=True)
-                  .groupby(task_variable, observed=False))
+                  .groupby(task_variable))
 
     try:
         check_group_size(grp_trials, n_samples=n_samples, min_frac_samples=1.0)

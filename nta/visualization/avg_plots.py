@@ -119,7 +119,7 @@ def subsample_trial_types(trials: pd.DataFrame,
     if (target_size is None) or (min_trial_type < target_size):
         target_size = min_trial_type
 
-    subsampled_trials = trials_.groupby(column, observed=False).sample(n=target_size)
+    subsampled_trials = trials_.groupby(column).sample(n=target_size)
 
     return subsampled_trials
 

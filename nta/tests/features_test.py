@@ -34,7 +34,7 @@ def sim_trials():
 def test_combined_trial_ids(sim_trials):
     assert sim_trials.nTrial.nunique() == len(sim_trials), (
         'Each row needs unique trial ID')
-    assert np.all(sim_trials.groupby('Session', observed=False)['nTrial'].diff().dropna() == sim_trials.groupby('Session', observed=False)['nTrial_orig'].diff().dropna()), 'Original relative sequential trial structure broken'
+    assert np.all(sim_trials.groupby('Session', observed=True)['nTrial'].diff().dropna() == sim_trials.groupby('Session', observed=True)['nTrial_orig'].diff().dropna()), 'Original relative sequential trial structure broken'
 
 
 def test_nans(sim_trials):

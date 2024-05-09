@@ -190,7 +190,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
     # Ensure that our photometry timeseries has unbroken trial continuity.
     if not ignore_precautions:
         if ts_full.Session.nunique() > 1:
-            assert ts_full.groupby('Session', observed=False).nTrial.diff().max() == 1, (
+            assert ts_full.groupby('Session', observed=True).nTrial.diff().max() == 1, (
                 'Found discontinuous trial IDs, cannot extract traces'
             )
         else:
@@ -247,7 +247,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
                                          channel=ch,
                                          states=[aligned_event],
                                          agg_funcs=['mean', 'min', 'max'],
-                                         offset=False)
+                                         offset=True)
 
     gc.collect()
     return trials_
@@ -511,7 +511,7 @@ def sort_by_trial_type(trials: pd.DataFrame,
     # Sort neural traces as timeseries to match trial table.
     stacked_ts_traces = stacked_ts_traces[idx_sorted]
     trials_sorted['ngroup'] = (trials_sorted
-                               .groupby(task_variable, sort=False, observed=False)
+                               .groupby(task_variable, sort=False, observed=True)
                                .ngroup()
                                )
     return trials_sorted, stacked_ts_traces

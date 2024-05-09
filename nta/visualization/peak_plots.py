@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from nta.utils import save_plot_metadata
+from ..utils import save_plot_metadata
 
 
 def initialize_peak_fig(states,
@@ -137,8 +137,8 @@ def exclude_outliers(peaks, x_col, y_col):
         return (column > lower_bound) & (column < upper_bound)
 
     peaks_ = peaks.dropna(subset=[y_col]).copy()
-    peaks_.groupby(x_col, observed=False)[y_col].agg([get_num_outliers])
-    peaks_ = (peaks_.loc[peaks_.groupby(x_col, group_keys=False, observed=False)[y_col]
+    peaks_.groupby(x_col)[y_col].agg([get_num_outliers])
+    peaks_ = (peaks_.loc[peaks_.groupby(x_col, group_keys=False)[y_col]
                                .apply(not_outlier)]
                     .reset_index(drop=True))
 
@@ -213,15 +213,13 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
 
     ylab = channel.split('_')[0]
-    # [ax_.set(ylabel=f'{metrics[k]} {ylab}') for k, ax_ in ax.items()]
 
     try:
         ax['reward'].set(xlabel='')
         ticks = [ax['Cue'].get_xticks()[0], ax['Cue'].get_xticks()[-1]]
-        # tick_labels = [int(i) for i in ticks]
 
-        ax['Cue'].set(xlabel=col_id, ylabel=ylab, xticks=ticks)#, xticklabels=tick_labels)
-        ax['reward'].set(xlabel='', ylabel=ylab, xticks=ticks)#, xticklabels=tick_labels)
+        ax['Cue'].set(xlabel=col_id, ylabel=ylab, xticks=ticks)
+        ax['reward'].set(xlabel='', ylabel=ylab, xticks=ticks)
         ax['no reward'].set(xlabel=col_id, yticks=[0, -1, -2], xticks=ticks,
                             ylim=(-3, 0), ylabel=ylab)
         ax['no reward'].axhline(y=0, color='k', lw=2)

@@ -207,7 +207,7 @@ def label_trial_types(ax,
     x_scale_factor = np.abs(ax.get_xlim()).sum()
     x_offset = x_scale_factor / (500 * tstep)
 
-    for i, (key, grp) in enumerate(trials.groupby(task_variable, sort=False, observed=False)):
+    for i, (key, grp) in enumerate(trials.groupby(task_variable, sort=False)):
 
         # Select color for trial type labeling and annotation.
         if trial_type_palette is None:
