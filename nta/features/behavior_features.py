@@ -613,8 +613,6 @@ def add_behavior_cols(trials: pd.DataFrame,
         trials_ = shift_trial_feature(trials_, col=feature, n_shift=1,
                                       shift_forward=False)
 
-    trials_ = trials_.drop(columns=['sSelection'])
-
     if isinstance(timeseries, pd.DataFrame):
         return trials_, ts_
     else:
