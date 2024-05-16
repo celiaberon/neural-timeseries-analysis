@@ -1,4 +1,5 @@
 import gc
+import getpass
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -24,10 +25,9 @@ class DataSet(ABC):
                  label: str = '',
                  save: bool = True,
                  col_grp: str = 'minimal',
-                 add_cols: dict[set] = {}):
+                 add_cols: dict[set] = {},
+                 session_cap: int = None):
 
-        # if not isinstance(mice, list):
-        #     mice = [mice]
         self.mice = mice
         self.verbose = verbose
         self.qc_photo = qc_photo
@@ -35,6 +35,7 @@ class DataSet(ABC):
         self.col_grp = col_grp
         self.ts_add_cols = add_cols.get('ts', set())
         self.trls_add_cols = add_cols.get('trials', set())
+        self.session_cap = session_cap  # max number of sessions per mouse
 
         self.root = self.set_root()
         self.data_path = self.set_data_path()
@@ -151,11 +152,9 @@ class DataSet(ABC):
                         'Date': 'object',
                         'Session': 'object',
                         'Condition': np.int16,
-                        'sSelection': np.int8,
                         'tSelection': np.int16,
                         'direction': np.float32,
                         'Reward': np.float32,
-                        'T_Reward': np.float32,
                         'T_ENL': np.int16,
                         'n_ENL': np.int8,
                         'n_Cue': np.int8,
@@ -165,34 +164,36 @@ class DataSet(ABC):
                         'blockLength': np.int8,
                         'iInBlock': np.int8,
                         'flag_block': 'bool',
-                        'timeout_block': 'bool',
-                        'timeout_thresh': 'object',
                         'timeout': 'bool',
                         'Switch': np.float32}
 
-        ts_dtypes = {
-                     'session_clock': np.float32,
-                     'nTrial': np.int32,
-                     'iBlock': np.float32,
-                     'nENL': np.float32,
-                     'iSpout': np.int8,
-                     'ENLP': np.int8,
-                     'CueP': np.int8,
-                     'ENL': np.int8,
-                     'Cue': np.int8,
-                     'Select': np.int8,
-                     'stateConsumption': np.int8,
-                     'TO': np.int8,
-                     'system_nTrial': np.int8,
-                     'outcome_licks': np.int8,
-                     'Consumption': np.int8,
-                     'state_ENLP': np.int8,
-                     'session': 'object',
-                     'trial_clock': np.float32,
-                     'fs': np.float32}
+        usecols = list(trial_dtypes.keys())
+        trials = pd.read_csv(trials_path, index_col=None, dtype=trial_dtypes,
+                             usecols=usecols)
 
+        ts_dtypes = {
+            'session_clock': 'float',
+            'nTrial': np.int32,
+            'iBlock': np.float16,
+            'nENL': np.float16,
+            'iSpout': np.int8,
+            'ENLP': np.int8,
+            'CueP': np.int8,
+            'ENL': np.int8,
+            'Cue': np.int8,
+            'Select': np.int8,
+            'stateConsumption': np.int8,
+            'TO': np.int8,
+            'outcome_licks': np.float16,
+            'Consumption': np.int8,
+            'state_ENLP': np.int8,
+            'session': 'object',
+            'trial_clock': 'float',
+            'fs': np.float16}
+
+        usecols = list(ts_dtypes.keys())
+        usecols.extend(['z_grnL', 'z_grnR'] + list(self.ts_add_cols))
         ts = pd.read_parquet(ts_path).astype(ts_dtypes)
-        trials = pd.read_csv(trials_path, index_col=0, dtype=trial_dtypes)
 
         return ts, trials
 
@@ -370,6 +371,9 @@ class DataSet(ABC):
             multi_sessions = self.concat_sessions(sub_sessions=trials_matched,
                                                   full_sessions=multi_sessions)
 
+            if (self.session_cap is not None) and (multi_sessions['trials'].Session.nunique() >= self.session_cap):
+                break
+
         # TODO: QC all mice sessions by ENL penalty rate set per mouse
 
         gc.collect()
@@ -432,7 +436,7 @@ class DataSet(ABC):
                   .reset_index(drop=True)
                   .diff()
                   .dropna()
-                  .astype('float32')
+                  .astype('float')
                   .round(5))
 
         tsteps = tsteps.where(abs(tsteps) < 0.2).dropna()
@@ -442,6 +446,8 @@ class DataSet(ABC):
 
         if tsteps_consistency < 0.99:
             print('multiple sampling rates detected')
+            if any(tsteps == 0) and (np.mean(tsteps == 0) < 1e-5):
+                tsteps = tsteps[tsteps > 0]  # presumably due to float limits
             is_close = (tsteps.max() - tsteps.min()) < 0.001
             low_err = tsteps.var() / tsteps.mean()
             if not (is_close and low_err):
@@ -454,18 +460,25 @@ class DataSet(ABC):
             self.fs = round(1 / self.tstep, 5)
 
 
-class StandardData(DataSet):
+class ProbHFPhotometry(DataSet):
 
     def __init__(self,
                  mice: str | list[str],
                  **kwargs):
+
+        assert 'celia' in getpass.getuser().lower(), (
+            'Please write your own DataSet class')
+
         super().__init__(mice, **kwargs)
         self.dataset = 'celia'
-        # self.channels = self.set_channels()
 
     def set_root(self):
         '''Sets the root path for the dataset'''
-        return Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
+        if 'celia' in getpass.getuser().lower():
+            root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
+        else:
+            raise NotImplementedError('Need path for user with ProbHFPhotometry')
+        return root
 
     def set_data_path(self):
         '''Sets the path to the session data'''
@@ -495,9 +508,8 @@ class StandardData(DataSet):
             cols_to_drop = list(cols_to_drop - self.ts_add_cols)
             df_dict['ts'] = df_dict['ts'].drop(columns=cols_to_drop)
 
-            cols_to_drop = {'k1', 'k2', 'k3', 'timeout_block', '+1seq2',
-                            'timeout_thresh', 'RL_seq2', 'RL_seq3', '-1seq3',
-                            '+1seq3', 'T_Reward'
+            cols_to_drop = {'k1', 'k2', 'k3', '+1seq2', 'RL_seq2', 'RL_seq3',
+                            '-1seq3', '+1seq3', 
                             } & set(df_dict['trials'].columns)
             col_to_drop = list(cols_to_drop - self.trls_add_cols)
             df_dict['trials'] = df_dict['trials'].drop(columns=col_to_drop)
@@ -516,7 +528,12 @@ class DeterministicData(DataSet):
 
     def set_root(self):
         '''Sets the root path for the dataset'''
-        return Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/headfixed_DAB_data/Ally_data/rDA')
+
+        if 'celia' in getpass.getuser().lower():
+            root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/headfixed_DAB_data/Ally_data/rDA')
+        else:
+            raise NotImplementedError('Need path for user with DeterministicData')
+        return root
 
     def set_data_path(self):
         '''Sets the path to the session data'''
@@ -596,7 +613,11 @@ class SplitConditions(DataSet):
 
     def set_root(self):
         '''Sets the root path for the dataset'''
-        return Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
+        if 'celia' in getpass.getuser().lower():
+            root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
+        else:
+            raise NotImplementedError('Need path for user with SplitConditions')
+        return root
 
     def set_data_path(self):
         '''Sets the path to the session data'''
