@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from tqdm import tqdm
 
 from ..features import behavior_features as bf
@@ -68,6 +69,10 @@ class DataSet(ABC):
         self.trials = cast_object_to_category(self.trials)
 
         self.get_sampling_freq()
+        self.add_mouse_palette()
+
+        self.check_event_order()
+        gc.collect()
 
     @abstractmethod
     def set_root(self):
@@ -115,6 +120,11 @@ class DataSet(ABC):
         ts['Cue'] = ts['Cue'] + ts['CueP']  # recover original state
         ts = bf.split_penalty_states(ts, penalty='ENLP')
         ts = bf.split_penalty_states(ts, penalty='CueP')
+        ts = bf.split_penalty_states(ts, penalty='CueP', cuep_ref_enl=True)
+
+        if 'trial_clock' in ts.columns:
+            ts['trial_clock'] = 1 / ts['fs']
+            ts['trial_clock'] = ts.groupby('nTrial', observed=True)['trial_clock'].cumsum()
 
         return trials, ts
 
@@ -175,7 +185,7 @@ class DataSet(ABC):
             'session_clock': 'float',
             'nTrial': np.int32,
             'iBlock': np.float16,
-            'nENL': np.float16,
+            # 'nENL': np.float16,
             'iSpout': np.int8,
             'ENLP': np.int8,
             'CueP': np.int8,
@@ -500,21 +510,75 @@ class ProbHFPhotometry(DataSet):
 
         if self.col_grp == 'minimal':
             # Drop columns that aren't typically accessed for analysis.
-            cols_to_drop = {'system_nTrial', 'raw_grnR', 'raw_grnL',
-                            'detrend_grnR', 'detrend_grnL', 'outcome_licks',
-                            'trial_clock', 'TO', 'nENL', 'iBlock',
+            cols_to_drop = {'system_nTrial', 'state_ENL_preCueP', 'state_CueP',
+                            'outcome_licks', 'TO', 'nENL', 'iBlock',
                             'state_ENLP', 'ENLP', 'CueP', 'stateConsumption',
-                            } & set( df_dict['ts'].columns)
+                            } & set(df_dict['ts'].columns)
             cols_to_drop = list(cols_to_drop - self.ts_add_cols)
             df_dict['ts'] = df_dict['ts'].drop(columns=cols_to_drop)
 
             cols_to_drop = {'k1', 'k2', 'k3', '+1seq2', 'RL_seq2', 'RL_seq3',
-                            '-1seq3', '+1seq3', 
+                            '-1seq3', '+1seq3',
                             } & set(df_dict['trials'].columns)
             col_to_drop = list(cols_to_drop - self.trls_add_cols)
             df_dict['trials'] = df_dict['trials'].drop(columns=col_to_drop)
 
         return df_dict
+
+    def add_mouse_palette(self):
+
+        '''Set up some consistent mapping to distinguish mice in plots.'''
+        self.palettes['mouse_pal'] = {mouse: color for mouse, color
+                                      in zip(self.mice, sns.color_palette('deep', n_colors=len(self.mice)))}
+
+
+    def check_event_order(self):
+
+        '''
+        Test to ensure no events appear to occur out of task-defined trial
+        order. Note, it's expected that a few edge cases may be given the wrong
+        trial ID. This seems to only happen for ENLPs that happen at trial time
+        of 0 (assigned to preceding trial. They can be  dealt with, but any
+        other cases should raise an alarm.
+        '''
+
+        trial_event_order = {
+            'ENLP': 1,
+            'state_ENLP': 1,
+            'CueP': 1,
+            'state_CueP': 1,
+            'ENL': 2,
+            'Cue': 3,
+            'Select': 4,
+            'Consumption': 5
+        }
+
+        ts = self.ts.copy()
+        ts['event_order'] = np.nan
+
+        for event, val in trial_event_order.items():
+            if event not in ts.columns: continue
+            ts.loc[ts[event] == 1, 'event_order'] = val
+
+        # Should be monotonic increase. Any events out of order get flagged.
+        out_of_order = (ts.dropna(subset='event_order')
+                        .groupby('nTrial', observed=True)['event_order']
+                        .diff() < 0)
+
+        ooo = ts.loc[out_of_order[out_of_order].index]
+        ooo_trials = ooo.nTrial.unique()
+
+        ts['flag_ooo'] = np.nan
+        ts.loc[ooo.index, 'flag_ooo'] = 1
+        post_ooo = ts.query('nTrial.isin(@ooo_trials)').groupby('nTrial')['flag_ooo'].ffill(1).sum()
+        assert (ooo['ENLP'].all()) & (~any(ooo[['Cue', 'Select', 'Consumption', 'ENL']].any())), (
+               'events out of order beyond ENLP edge cases')
+        assert post_ooo == len(ooo), (
+            'rows out of order following ENLP edge cases')
+
+        # Replace mistrialed events with NaNs (because fixing timing tricky
+        # and these are very rare).
+        self.ts.loc[ooo.index, 'ENLP'] = np.nan
 
 
 class DeterministicData(DataSet):

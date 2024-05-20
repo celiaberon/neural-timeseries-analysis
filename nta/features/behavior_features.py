@@ -441,7 +441,7 @@ def apply_trial_rep_threshold(trials, col, min_reps=100, by_outcome=False):
     return trials_
 
 
-def split_penalty_states(ts, penalty='ENLP'):
+def split_penalty_states(ts, penalty='ENLP', cuep_ref_enl=False):
 
     '''
     Note: Can do this before photometry alignment now that using 23-29 as sync
@@ -450,8 +450,6 @@ def split_penalty_states(ts, penalty='ENLP'):
 
     def is_post_final_penalty(trial_ts, pen_state):
 
-        trial_id = trial_ts.nTrial.iloc[0].squeeze()
-
         # last enl break is offset, second to last is onset of real enl.
         true_enl_onset = np.where(trial_ts[pen_state].diff() != 0)[0][-2]
         enl_onset_time = trial_ts.iloc[true_enl_onset]['session_clock']
@@ -459,7 +457,9 @@ def split_penalty_states(ts, penalty='ENLP'):
         return trial_ts['session_clock'] < enl_onset_time
 
     ts_ = ts.copy()
-    pen_state = penalty[:-1]
+
+    # Overwrite pre-cue penalty ENL if backtracking from cue penalties.
+    pen_state = penalty[:-1] if not cuep_ref_enl else 'ENL'
 
     pen_trials = ts_.loc[ts_[penalty] == 1].nTrial.dropna().unique()
 
@@ -479,9 +479,10 @@ def split_penalty_states(ts, penalty='ENLP'):
 
     mask = mask.astype(ts[pen_state].dtype)
     # label pre-penalty states as penalty states
-    ts_[f'state_{penalty}'] = 0
-    ts_.loc[ts_.nTrial.isin(pen_trials), f'state_{penalty}'] = (mask.values
-                                                                * ts_.query('nTrial.isin(@pen_trials)')[pen_state])
+    new_state = f'state_{penalty}' if not cuep_ref_enl else 'state_ENL_preCueP'
+    ts_[new_state] = 0
+    ts_.loc[ts_.nTrial.isin(pen_trials), new_state] = (mask.values
+                                                       * ts_.query('nTrial.isin(@pen_trials)')[pen_state])
 
     # remove pre-penalty states from true states
     ts_.loc[ts_.nTrial.isin(pen_trials), pen_state] = ((1 - mask.values)
