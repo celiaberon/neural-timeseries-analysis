@@ -336,12 +336,13 @@ def config_plot(ax,
     and setting limits/legends/tick labels consistently.
     '''
 
-    ts_channel = ts[column]
+    ts_channel = ts[y_col]
     align_event = y_col.split('_')[0]
     if ylim is None:
-        ymin = np.mean(ts_channel) - 0.8 * np.abs(np.min(ts_channel))
+        ymin = np.mean(ts_channel) - 1 * np.abs(np.min(ts_channel))
         ymax = np.mean(ts_channel) + 0.8 * np.max(ts_channel)
         ylim = (ymin, ymax)
+        print(ylim)
     ax.axvline(x=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0,
                label=None)
     ax.axhline(y=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0)
