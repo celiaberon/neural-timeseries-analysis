@@ -108,7 +108,8 @@ def find_group_peak_time(ts: pd.DataFrame,
             Time (in seconds) of the average peak for the given trial type.
     '''
     event_lags = {'Cue': 0.3,  # Cue delay shorter to not overlap Consumption
-                  'Consumption': 0.5
+                  'Consumption': 0.5,
+                  'Select': 0.3,
                   }
 
     if max_peak_delay is None:
@@ -186,7 +187,7 @@ def group_peak_metrics(trials: pd.DataFrame,
         exp_trials = create_combo_col(exp_trials, grouping_levels)
 
         # Iterate over each unique condition.
-        for peak_group_id, peak_group in exp_trials.groupby('combo_col', observed=False):
+        for peak_group_id, peak_group in exp_trials.groupby('combo_col'):
 
             # Iterate over each reward outcome in condition and use
             # appropriate function to detect peak for group, storing mean
@@ -226,7 +227,7 @@ def group_peak_quantification(trials: pd.DataFrame,
                               channel: str,
                               *,
                               offset: bool = True,
-                              hw: int = 2,
+                              hw: int = 3,
                               agg_funcs: list[str] = ['mean']) -> pd.DataFrame:
 
     '''
@@ -292,6 +293,7 @@ def group_peak_quantification(trials: pd.DataFrame,
 
         # Grab subset of rows for peak averaging.
         agg_df = (exp_trials.loc[snippet_idcs]
+                  .query(f'{times_col} > 0')  # can only happen after event
                   .groupby('nTrial', as_index=True)
                   .agg({channel_col: af})
                   .rename(columns={channel_col: peak_col}))
@@ -301,17 +303,15 @@ def group_peak_quantification(trials: pd.DataFrame,
                                 right_index=True, how='left')
         trials_[peak_col] = trials_[peak_col].astype('float32')
 
-    if offset:
-        # At the moment offset everything by timepoint preceding cue.
-        if (state != 'Cue') and (f'Cue_{channel}_offset' in exp_trials.columns):
-            trials_[peak_col] = trials_[peak_col] - trials_[f'Cue_{channel}_offset']
-        else:
-            offset_df = (exp_trials.loc[exp_trials[times_col] == T_BASELINE]
-                         .set_index('nTrial')[[channel_col]]
-                         .rename(columns={channel_col: f'{state}_{channel}_offset'}))
-            trials_ = trials_.merge(offset_df, left_on='nTrial',
-                                    right_index=True, how='left')
-            trials_[peak_col] -= trials_[f'{state}_{channel}_offset']
+        if offset:
+            if f'Cue_{channel}_offset' not in trials_.columns:
+                offset_df = (exp_trials.loc[exp_trials[times_col] == T_BASELINE]
+                             .set_index('nTrial')[[f'Cue_{channel}']]
+                             .rename(columns={f'Cue_{channel}': f'Cue_{channel}_offset'}))
+                trials_ = trials_.merge(offset_df, left_on='nTrial',
+                                        right_index=True, how='left')
+            # At the moment offset everything by timepoint preceding cue.
+            trials_[f'{peak_col}_adjusted'] = trials_[peak_col] - trials_[f'Cue_{channel}_offset']
 
     gc.collect()
 
