@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import scipy
 
-from nta.features.select_trials import match_trial_ids
-from nta.preprocessing.signal_processing import snr_photo_signal
+from ..features.select_trials import match_trial_ids
+from ..preprocessing.signal_processing import snr_photo_signal
 
 
 def QC_included_trials(ts: pd.DataFrame,
