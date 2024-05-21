@@ -1,6 +1,7 @@
 import gc
 import getpass
 import os
+import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 
@@ -25,7 +26,6 @@ class DataSet(ABC):
                  qc_params: dict = {},
                  label: str = '',
                  save: bool = True,
-                 col_grp: str = 'minimal',
                  add_cols: dict[set] = {},
                  session_cap: int = None):
 
@@ -33,11 +33,11 @@ class DataSet(ABC):
         self.verbose = verbose
         self.qc_photo = qc_photo
         self.label = label if label else self.mice
-        self.col_grp = col_grp
         self.ts_add_cols = add_cols.get('ts', set())
         self.trls_add_cols = add_cols.get('trials', set())
         self.session_cap = session_cap  # max number of sessions per mouse
 
+        # Set up paths and standard attributes.
         self.root = self.set_root()
         self.data_path = self.set_data_path()
         self.summary_path = self.set_data_overview_path()
@@ -46,12 +46,15 @@ class DataSet(ABC):
             self.save_path = self.set_save_path()
         self.cohort = self.load_cohort_dict()
         self.palettes = load_config_variables(self.root)
+        self.add_mouse_palette()
 
+        # Initizalize attributes that will hold data.
         self.ts = pd.DataFrame()
         self.trials = pd.DataFrame()
         self.channels = self.set_channels()
         self.sig_channels = set()
 
+        # Load all data.
         if not isinstance(mice, list):
             self.mouse_ = mice
             multi_sessions = self.read_multi_sessions(qc_params)
@@ -62,16 +65,16 @@ class DataSet(ABC):
 
         self.trials = bf.order_sessions(self.trials)
 
-        # Downcast datatypes to make processing on dataset more memory efficient.
+        # Some validation steps on loaded data.
+        self.get_sampling_freq()
+        self.check_event_order()
+
+        # Downcast datatypes to make more memory efficient.
         self.trials = downcast_all_numeric(self.trials)
         self.ts = downcast_all_numeric(self.ts)
         self.ts = cast_object_to_category(self.ts)
         self.trials = cast_object_to_category(self.trials)
 
-        self.get_sampling_freq()
-        self.add_mouse_palette()
-
-        self.check_event_order()
         gc.collect()
 
     @abstractmethod
@@ -92,6 +95,11 @@ class DataSet(ABC):
     @abstractmethod
     def set_session_path(self):
         '''Sets path to single session data'''
+        pass
+
+    @abstractmethod
+    def check_event_order(self):
+        '''Expected order of events to ensure data is sequencing correctly.'''
         pass
 
     def set_save_path(self):
@@ -184,8 +192,7 @@ class DataSet(ABC):
         ts_dtypes = {
             'session_clock': 'float',
             'nTrial': np.int32,
-            'iBlock': np.float16,
-            # 'nENL': np.float16,
+            # 'iBlock': np.float16,
             'iSpout': np.int8,
             'ENLP': np.int8,
             'CueP': np.int8,
@@ -193,19 +200,32 @@ class DataSet(ABC):
             'Cue': np.int8,
             'Select': np.int8,
             'stateConsumption': np.int8,
-            'TO': np.int8,
-            'outcome_licks': np.float16,
+            # 'TO': np.int8,
+            # 'outcome_licks': np.float16,
             'Consumption': np.int8,
             'state_ENLP': np.int8,
             'session': 'object',
-            'trial_clock': 'float',
+            # 'trial_clock': 'float',
             'fs': np.float16}
 
         usecols = list(ts_dtypes.keys())
         usecols.extend(['z_grnL', 'z_grnR'] + list(self.ts_add_cols))
-        ts = pd.read_parquet(ts_path).astype(ts_dtypes)
 
-        return ts, trials
+        # Load timeseries data but be forgiving about missing columns.
+        while usecols:
+            try:
+                ts = pd.read_parquet(ts_path, columns=usecols).astype(ts_dtypes)
+                return ts, trials
+            except ValueError as e:
+                # Extract the missing column name from the error message.
+                re_match = re.search(r"'(.+)'", str(e))
+                if isinstance(re_match, re.Match) & (re_match.group(1) in usecols):
+                    missing_col = re_match.group(1)
+                    usecols.remove(missing_col)
+                else:
+                    # In the case we can't find missing column.
+                    raise e
+        raise ValueError('All specified columns missing from parquet file.')
 
     def load_cohort_dict(self):
         '''Load lookup table for sensor expressed in each mouse of cohort.'''
@@ -381,8 +401,7 @@ class DataSet(ABC):
             multi_sessions = self.concat_sessions(sub_sessions=trials_matched,
                                                   full_sessions=multi_sessions)
 
-            if (self.session_cap is not None) and (multi_sessions['trials'].Session.nunique() >= self.session_cap):
-                break
+            if self.at_session_cap(multi_sessions): break
 
         # TODO: QC all mice sessions by ENL penalty rate set per mouse
 
@@ -390,9 +409,23 @@ class DataSet(ABC):
 
         return multi_sessions
 
+    def at_session_cap(self, multi_sessions):
+
+        if self.session_cap is None:
+            return False
+
+        if multi_sessions['trials'].Session.nunique() >= self.session_cap:
+            return True
+
+        return False
+
+
     def eval_photo_sig(self, ts):
-        '''Run QC on photometry channels, filtering out data from sessions
-        where full session lacked real signal.'''
+
+        '''
+        Run QC on photometry channels, filtering out data from sessions
+        where full session lacked real signal.
+        '''
         # If no photometry channels passed QC, move on to next session.
         sensor = self.cohort.get(self.mouse_)
         if self.qc_photo:
@@ -469,6 +502,13 @@ class DataSet(ABC):
             self.tstep = round(tsteps.mode().squeeze(), 5)
             self.fs = round(1 / self.tstep, 5)
 
+    def add_mouse_palette(self):
+
+        '''Set up some consistent mapping to distinguish mice in plots.'''
+        pal = sns.color_palette('deep', n_colors=len(self.mice))
+        self.palettes['mouse_pal'] = {mouse: color for mouse, color
+                                      in zip(self.mice, pal)}
+
 
 class ProbHFPhotometry(DataSet):
 
@@ -508,29 +548,24 @@ class ProbHFPhotometry(DataSet):
 
     def cleanup_cols(self, df_dict):
 
-        if self.col_grp == 'minimal':
-            # Drop columns that aren't typically accessed for analysis.
-            cols_to_drop = {'system_nTrial', 'state_ENL_preCueP', 'state_CueP',
-                            'outcome_licks', 'TO', 'nENL', 'iBlock',
-                            'state_ENLP', 'ENLP', 'CueP', 'stateConsumption',
-                            } & set(df_dict['ts'].columns)
-            cols_to_drop = list(cols_to_drop - self.ts_add_cols)
-            df_dict['ts'] = df_dict['ts'].drop(columns=cols_to_drop)
+        # Drop columns that aren't typically accessed for analysis but were
+        # necessary for preprocessing.
+        cols_to_drop = {'state_ENL_preCueP', 'state_CueP', 'state_ENLP',
+                        'stateConsumption', 'CueP', 'iLick', 'ILI',
+                        'bout_group', 'cons_bout'
+                        } & set(df_dict['ts'].columns)
+        cols_to_drop = list(cols_to_drop - self.ts_add_cols)
+        df_dict['ts'] = df_dict['ts'].drop(columns=cols_to_drop)
 
-            cols_to_drop = {'k1', 'k2', 'k3', '+1seq2', 'RL_seq2', 'RL_seq3',
-                            '-1seq3', '+1seq3',
-                            } & set(df_dict['trials'].columns)
-            col_to_drop = list(cols_to_drop - self.trls_add_cols)
-            df_dict['trials'] = df_dict['trials'].drop(columns=col_to_drop)
+        cols_to_drop = {'k1', 'k2', 'k3', '+1seq2', 'RL_seq2', 'RL_seq3',
+                        '-1seq3', '+1seq3',
+                        } & set(df_dict['trials'].columns)
+        col_to_drop = list(cols_to_drop - self.trls_add_cols)
+        df_dict['trials'] = df_dict['trials'].drop(columns=col_to_drop)
+
+        gc.collect()
 
         return df_dict
-
-    def add_mouse_palette(self):
-
-        '''Set up some consistent mapping to distinguish mice in plots.'''
-        self.palettes['mouse_pal'] = {mouse: color for mouse, color
-                                      in zip(self.mice, sns.color_palette('deep', n_colors=len(self.mice)))}
-
 
     def check_event_order(self):
 
@@ -579,6 +614,58 @@ class ProbHFPhotometry(DataSet):
         # Replace mistrialed events with NaNs (because fixing timing tricky
         # and these are very rare).
         self.ts.loc[ooo.index, 'ENLP'] = np.nan
+
+
+class ProbHFPhotometryTails(ProbHFPhotometry):
+
+    def __init__(self,
+                 mice: str | list[str],
+                 **kwargs):
+
+        assert 'celia' in getpass.getuser().lower(), (
+            'Please write your own DataSet class')
+
+        super().__init__(mice, **kwargs)
+
+    def read_multi_sessions(self,
+                            qc_params,
+                            **kwargs) -> dict:
+
+        from ..features.select_trials import match_trial_ids
+
+        sessions = self.sessions_to_load(**qc_params)
+        multi_sessions = {key: pd.DataFrame() for key in ['trials', 'ts']}
+
+        # Loop through files to be processed
+        for session_date in tqdm(sessions, self.mouse_, disable=False):
+
+            if self.verbose: print(session_date)
+            self.session_ = session_date
+
+            ts, trials = self.load_session_data()
+            if ts is None: continue
+
+            trials, ts = self.custom_update_columns(trials, ts)
+            trials, ts = self.update_columns(trials, ts)
+
+            ts = self.eval_photo_sig(ts)
+            if ts is None: continue
+
+            # Trial level quality control needs to come at the end.
+            # Instead of qc.included_trials(), just match ids without trimming.
+            trials, ts = match_trial_ids(trials, ts, allow_discontinuity=False)
+            trials_matched = {'trials': trials, 'ts': ts}
+
+            trials_matched = self.cleanup_cols(trials_matched)
+
+            multi_sessions = self.concat_sessions(sub_sessions=trials_matched,
+                                                  full_sessions=multi_sessions)
+
+            if self.at_session_cap(multi_sessions): break
+
+        gc.collect()
+
+        return multi_sessions
 
 
 class DeterministicData(DataSet):
