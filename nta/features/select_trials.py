@@ -212,7 +212,7 @@ def clean_data(trials: pd.DataFrame,
 
         if drop_timeout:  # take only trials with choice lick
             ntrials = len(trials_)
-            trials_ = trials_.query('~timeout')
+            trials_ = trials_.query('timeout == False')
             timeouts_dropped = ntrials - len(trials_)
             print(f'{timeouts_dropped = }')
             if store_results:
@@ -226,6 +226,7 @@ def clean_data(trials: pd.DataFrame,
     # these blocks occur too infrequently -- less than 10 sessions
     min_block, max_block = clip_blocks
     trials_ = trials_.query('iBlock.between(@min_block, @max_block)')
+    print(f'trimmed data between block {min_block} and {max_block}')
 
     if include_ts:
         trials_, ts_ = match_trial_ids(trials_, ts_, allow_discontinuity=True)
