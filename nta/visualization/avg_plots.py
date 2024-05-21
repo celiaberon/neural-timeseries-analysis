@@ -19,6 +19,131 @@ from ..events.align import get_lick_times
 from ..utils import save_plot_metadata
 
 
+def plotting_wrapper(trials: pd.DataFrame,
+                     alignment_states: list = None,
+                     channel: str = None,
+                     **kwargs):
+
+    '''
+    Plot panel of photometry figures, with subplot for each aligned event.
+
+    Args:
+        trials:
+            Trial-based data containing aligned photometry snippets and
+            timestamps.
+        alignment_states:
+            List of events to plot aligned neural data to.
+        channel:
+            L or R hemisphere photometry channel.
+        **kwargs:
+            See plot_trial_type_comparison().
+
+    Returns:
+        fig:
+            Figure object containing created and filled plot.
+        axs:
+            Axes object containing created and filled plot.
+    '''
+
+    axs = None
+    fig = None
+
+    # Default to plotting 3 main trial events.
+    if alignment_states is None:
+        alignment_states = ['Cue', 'Select', 'Consumption']
+
+    # Iteratively fill subplots with each event-alignd photometry trace.
+    for plot_iter, event in enumerate(alignment_states, start=1):
+        n_iters = [len(alignment_states), plot_iter - 1]
+
+        leg = kwargs.get('leg_override', plot_iter >= n_iters[0])
+        photometry_column = f'{event}_{channel}'
+        exploded_trials = (trials.copy()
+                           .dropna(subset=[photometry_column])
+                           .explode(column=[photometry_column,
+                                            f'{event}_times'])
+                           )
+        fig, axs = plot_trial_type_comparison(exploded_trials,
+                                              align_event=event,
+                                              y_col=photometry_column,
+                                              n_iters=n_iters,
+                                              show_leg=leg,
+                                              fig=fig,
+                                              axs=axs,
+                                              **kwargs)
+
+    if kwargs.get('save', False):
+        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
+
+    return fig, axs
+
+
+def plotting_wrapper_channels(trials: pd.DataFrame,
+                              event: list = None,
+                              channels: list[str] = None,
+                              **kwargs):
+
+    '''
+    Plot all channels with data aligned to a given photmetry event.
+
+    Args:
+        trials:
+            Trial-based data containing aligned photometry snippets and
+            timestamps.
+        event:
+            Single event to plot aligned neural data to.
+        channels:
+            Typically L and R hemisphere photometry channel.
+        **kwargs:
+            See plot_trial_type_comparison().
+
+    Returns:
+        fig:
+            Figure object containing created and filled plot.
+        axs:
+            Axes object containing created and filled plot.
+    '''
+
+    axs = None
+    fig = None
+
+    if not isinstance(channels, list):
+        channels = [channels]
+
+    # Quick check for whether provided channels have signal at all.
+    sig_channels = [ch for ch in channels
+                    if len(trials.dropna(subset=[f'{event}_{ch}'])) > 0]
+
+    channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
+    # Iteratively fill subplots with each event-alignd photometry trace.
+    for plot_iter, ch in enumerate(sig_channels, start=1):
+        n_iters = [len(sig_channels), plot_iter - 1]
+
+        leg = kwargs.get('leg_override', plot_iter >= n_iters[0])
+        photometry_column = f'{event}_{ch}'
+        exploded_trials = (trials.copy()
+                           .dropna(subset=[photometry_column])
+                           .explode(column=[photometry_column,
+                                            f'{event}_times'])
+                           )
+        fig, axs = plot_trial_type_comparison(
+            exploded_trials,
+            align_event=event,
+            y_col=photometry_column,
+            n_iters=n_iters,
+            show_leg=leg,
+            fig=fig,
+            axs=axs,
+            **kwargs)
+
+    [ax.set_title(channel_labels.get(ch[-1]), loc='left', pad=20, fontsize=12)
+     for ax, ch in zip(axs, sig_channels)]
+
+    if kwargs.get('save', False):
+        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
+
+    return fig, axs
+
 def set_new_axes(n_iters: list,
                  *,
                  behavior_hist: bool = True,
@@ -257,65 +382,6 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                                            column=column, **kwargs)
 
     plt.tight_layout()
-    return fig, axs
-
-
-def plotting_wrapper(trials: pd.DataFrame,
-                     alignment_states: list = None,
-                     channel: str = None,
-                     **kwargs):
-
-    '''
-    Plot panel of photometry figures.
-
-    Args:
-        trials:
-            Trial-based data containing aligned photometry snippets and
-            timestamps.
-        alignment_states:
-            List of events to plot aligned neural data to.
-        channel:
-            L or R hemisphere photometry channel.
-        **kwargs:
-            See plot_trial_type_comparison().
-
-    Returns:
-        fig:
-            Figure object containing created and filled plot.
-        axs:
-            Axes object containing created and filled plot.
-    '''
-
-    axs = None
-    fig = None
-
-    # Default to plotting 3 main trial events.
-    if alignment_states is None:
-        alignment_states = ['Cue', 'Select', 'Consumption']
-
-    # Iteratively fill subplots with each event-alignd photometry trace.
-    for plot_iter, event in enumerate(alignment_states, start=1):
-        n_iters = [len(alignment_states), plot_iter - 1]
-
-        leg = kwargs.get('leg_override', plot_iter >= n_iters[0])
-        photometry_column = f'{event}_{channel}'
-        exploded_trials = (trials.copy()
-                           .dropna(subset=[photometry_column])
-                           .explode(column=[photometry_column,
-                                            f'{event}_times'])
-                           )
-        fig, axs = plot_trial_type_comparison(exploded_trials,
-                                              align_event=event,
-                                              y_col=photometry_column,
-                                              n_iters=n_iters,
-                                              show_leg=leg,
-                                              fig=fig,
-                                              axs=axs,
-                                              **kwargs)
-
-    if kwargs.get('save', False):
-        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
-
     return fig, axs
 
 
