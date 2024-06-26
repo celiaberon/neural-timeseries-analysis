@@ -144,6 +144,7 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
 
     return fig, axs
 
+
 def set_new_axes(n_iters: list,
                  *,
                  behavior_hist: bool = True,
@@ -450,7 +451,7 @@ def label_legend_unique_handles(ax, **kwargs):
     return ax
 
 
-def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, **kwargs):
+def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, discrete_cpal=False, anchor=(1.3, 0), **kwargs):
 
     '''
     Create colorbar to replace legend. Should be called for sequential,
@@ -474,7 +475,7 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, **kwargs):
     if labels is None:
         labels = np.array(list(cpal.keys()))
 
-    if any(labels > 0) & any(labels < 0):
+    if (any(labels > 0) & any(labels < 0)) & (not discrete_cpal):
         cm_min, cm_max = (-hw - 1, hw + 1)
     else:
         cm_min, cm_max = (0, len(cpal) + 1)
@@ -489,10 +490,10 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, **kwargs):
     ax.legend().set_visible(False)
 
     # Add cbar to figure to avoid resizing subplots to accomodate.
-    fig.add_subplot(111, frameon=False)
+    ax = fig.add_subplot(111, frameon=False)
     plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
                     left=False, right=False)
-    cbar = plt.colorbar(sm, anchor=(1.3, 0), shrink=0.6)
+    cbar = plt.colorbar(sm, anchor=anchor, shrink=0.6, ax=ax)
     cbar.ax.tick_params(size=0)
     if len(labels) <= 7:
         cbar.set_ticks(np.arange(cm_min + 0.5, cm_max - 0.5),
