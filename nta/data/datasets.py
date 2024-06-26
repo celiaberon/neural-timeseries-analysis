@@ -70,10 +70,7 @@ class DataSet(ABC):
         self.check_event_order()
 
         # Downcast datatypes to make more memory efficient.
-        self.trials = downcast_all_numeric(self.trials)
-        self.ts = downcast_all_numeric(self.ts)
-        self.ts = cast_object_to_category(self.ts)
-        self.trials = cast_object_to_category(self.trials)
+        self.downcast_dtypes()
 
         gc.collect()
 
@@ -192,7 +189,6 @@ class DataSet(ABC):
         ts_dtypes = {
             'session_clock': 'float',
             'nTrial': np.int32,
-            # 'iBlock': np.float16,
             'iSpout': np.int8,
             'ENLP': np.int8,
             'CueP': np.int8,
@@ -200,12 +196,9 @@ class DataSet(ABC):
             'Cue': np.int8,
             'Select': np.int8,
             'stateConsumption': np.int8,
-            # 'TO': np.int8,
-            # 'outcome_licks': np.float16,
             'Consumption': np.int8,
             'state_ENLP': np.int8,
             'session': 'object',
-            # 'trial_clock': 'float',
             'fs': np.float16}
 
         usecols = list(ts_dtypes.keys())
@@ -218,10 +211,16 @@ class DataSet(ABC):
                 return ts, trials
             except ValueError as e:
                 # Extract the missing column name from the error message.
-                re_match = re.search(r"'(.+)'", str(e))
-                if isinstance(re_match, re.Match) & (re_match.group(1) in usecols):
-                    missing_col = re_match.group(1)
-                    usecols.remove(missing_col)
+                re_match = [re.search(r'\((.*?)\)|"(.*?)"', str(e)),
+                            re.search(r"'(.+)'", str(e))]
+                # re_match = re.search(r'\((.*?)\)|"(.*?)"', str(e))
+                re_match = [s for s in re_match if s is not None]
+
+                for s in re_match:
+                    if isinstance(s, re.Match) & (s.group(1) in usecols):
+                        missing_col = s.group(1)
+                        usecols.remove(missing_col)
+                        break
                 else:
                     # In the case we can't find missing column.
                     raise e
@@ -255,7 +254,7 @@ class DataSet(ABC):
         session_log = session_log.query('Mouse == @self.mouse_ \
                                         & Condition == @probs \
                                         & Pass == @QC_pass')
-        return list(set(session_log.Date.values))
+        return sorted(list(set(session_log.Date.values)))
 
     def get_max_trial(self, full_sessions: dict) -> int:
 
@@ -508,6 +507,13 @@ class DataSet(ABC):
         pal = sns.color_palette('deep', n_colors=len(self.mice))
         self.palettes['mouse_pal'] = {mouse: color for mouse, color
                                       in zip(self.mice, pal)}
+
+    def downcast_dtypes(self):
+
+        self.trials = downcast_all_numeric(self.trials)
+        self.ts = downcast_all_numeric(self.ts)
+        self.ts = cast_object_to_category(self.ts)
+        self.trials = cast_object_to_category(self.trials)
 
 
 class ProbHFPhotometry(DataSet):
