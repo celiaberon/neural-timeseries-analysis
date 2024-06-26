@@ -205,7 +205,7 @@ def clean_data(trials: pd.DataFrame,
             ntrials = len(trials_)
             trials_ = trials_.query('n_Cue == 1')
             cuep_dropped = ntrials - len(trials_)
-            print(f'{cuep_dropped=}')
+            print(f'{cuep_dropped = }')
             if store_results:
                 results['ENLP_dropped'] = enlp_dropped
                 results['CueP_dropped'] = cuep_dropped
