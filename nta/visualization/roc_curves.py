@@ -231,6 +231,7 @@ def multiclass_roc_curves(trials: pd.DataFrame,
                           neural_event: str = 'Consumption_grnL_mean',
                           pred_behavior: str = '',
                           trial_type: str = 'Reward',
+                          ax=None,
                           **kwargs):
 
     '''
@@ -255,13 +256,15 @@ def multiclass_roc_curves(trials: pd.DataFrame,
             class within `trial_type` of `trials`.
     '''
 
-    ax = None
-    for i, (key, grp) in enumerate(trials.groupby(trial_type, dropna=True)):
+    for i, (key, grp) in enumerate(trials.groupby(trial_type, dropna=True, observed=True)):
 
         if isinstance(neural_event, dict):
             ne = neural_event.get(key)
         else:
             ne = neural_event
+
+        if len(grp[ne].dropna()) == 0:
+            continue
 
         # Bootstrap (FPR, TPR) for each trial type defined by trial_type.
         bootstrapped_rocs = calc_roc_sample(trials=grp,
