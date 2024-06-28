@@ -138,13 +138,14 @@ class DataSet(ABC):
         return trials, ts
 
     def cleanup_cols(self, df_dict):
-
+        '''Remove unnecessary columns to minimize memory usage.'''
         return df_dict
 
     def set_timeseries_path(self):
         '''Set path to timeseries data file.'''
         file_path = self.set_session_path()
-        ts_path = file_path / f'{self.mouse_}_{self.session_}_timeseries.parquet.gzip'
+        fname = f'{self.mouse_}_{self.session_}_timeseries.parquet.gzip'
+        ts_path = file_path / fname
         return ts_path
 
     def set_trials_path(self):
@@ -207,13 +208,13 @@ class DataSet(ABC):
         # Load timeseries data but be forgiving about missing columns.
         while usecols:
             try:
-                ts = pd.read_parquet(ts_path, columns=usecols).astype(ts_dtypes)
+                ts = (pd.read_parquet(ts_path, columns=usecols)
+                        .astype(ts_dtypes))
                 return ts, trials
             except ValueError as e:
                 # Extract the missing column name from the error message.
                 re_match = [re.search(r'\((.*?)\)|"(.*?)"', str(e)),
                             re.search(r"'(.+)'", str(e))]
-                # re_match = re.search(r'\((.*?)\)|"(.*?)"', str(e))
                 re_match = [s for s in re_match if s is not None]
 
                 for s in re_match:
@@ -232,23 +233,25 @@ class DataSet(ABC):
         return cohort
 
     def sessions_to_load(self,
-                         probs: int = 9010,
-                         QC_pass: bool = True):
+                         probs: int | str = 9010,
+                         QC_pass: bool = True) -> list:
 
         '''
         Make list of sessions to include for designated mouse
 
         Args:
-            probs (int):
+            probs:
                 Filter bandit data by probability conditions.
-            QC_pass (bool):
+            QC_pass:
                 Whether to take sessions passing quality control (True) or
                 failing (False).
 
         Returns:
-            dates_list (list):
-                List of dates to load in for mouse.
+            dates_list:
+                List of dates to load in for mouse, sorted from earliest to
+                latest.
         '''
+
         session_log = pd.read_csv(self.summary_path)
         probs = str(probs) if not isinstance(probs, str) else probs
         session_log = session_log.query('Mouse == @self.mouse_ \
@@ -259,8 +262,8 @@ class DataSet(ABC):
     def get_max_trial(self, full_sessions: dict) -> int:
 
         '''
-        Get maximum trial ID to use for unique trial ID assignment. Importantly,
-        also confirm that max trial matches between dataframes.
+        Get maximum trial ID to use for unique trial ID assignment.
+        Importantly, also confirm that max trial matches between dataframes.
 
         Args:
             full_sessions:
@@ -287,18 +290,18 @@ class DataSet(ABC):
                         full_sessions: dict = None):
 
         '''
-        Aggregate multiple sessions by renumbering trials to provide unique trial
-        ID for each trial. Store original id in separate column.
+        Aggregate multiple sessions by renumbering trials to provide unique
+        trial ID for each trial. Store original id in separate column.
 
         Args:
             sub_sessions:
-                Smaller unit to be concatenated onto growing aggregate dataframe.
+                Smaller unit to be concatenated onto growing aggregate df.
             full_sessions:
                 Core larger unit updated with aggregating data.
 
         Returns:
             full_sessions:
-                Original full_sessions data now also containing sub_sessions data.
+                Original full_sessions data now containing sub_sessions data.
         '''
 
         max_trial = self.get_max_trial(full_sessions)
@@ -316,34 +319,29 @@ class DataSet(ABC):
             if 'Session' not in ss_vals.columns:
                 ss_vals['Session'] = '_'.join([self.mouse_, self.session_])
 
-            # Add max current trial value to all new trials before concatenation.
+            # Add max current trial value to all new trials before concat.
             tmp_copy = ss_vals.copy()
             tmp_copy['nTrial'] += max_trial
             full_sessions[key] = pd.concat((full_sessions[key], tmp_copy))
             full_sessions[key] = full_sessions[key].reset_index(drop=True)
 
-        # Use function to assert that new dataframes have matching max trial ID.
+        # Assert that new dataframes have matching max trial ID.
         _ = self.get_max_trial(full_sessions)
 
         return full_sessions
 
     def read_multi_mice(self,
-                        qc_params,
+                        qc_params: dict,
                         **kwargs):
 
         '''
-        Load in sessions by mouse and concatenate into one large dataframe keeping
-        every trial id unique.
+        Load in sessions by mouse and concatenate into one large dataframe
+        keeping every trial id unique.
 
-        Args:
-            mice:
-                List of mice from which to load data.
-            root:
-                Path to root directory containing Mouse data folder.
+        Stores data from multi_mice dict
+        {'trials': trials data,'timeseries': timeseries data}
+        as attributes of DataSet.
 
-        Returns:
-            multi_mice (dict):
-                {'trials': trials data, 'timeseries': timeseries data}
         '''
 
         multi_mice = {key: pd.DataFrame() for key in ['trials', 'ts']}
@@ -365,8 +363,17 @@ class DataSet(ABC):
         print(f'{self.trials.Session.nunique()} total sessions loaded in')
 
     def read_multi_sessions(self,
-                            qc_params,
+                            qc_params: dict,
                             **kwargs) -> dict:
+
+        '''
+        Load in multiple sessions for a single mouse and concatenate into one
+        dataframe, keeping every trial id unique.
+
+        Returns:
+            multi_sesions:
+                {'trials': trials data, 'timeseries': timeseries data}
+        '''
 
         sessions = self.sessions_to_load(**qc_params)
         multi_sessions = {key: pd.DataFrame() for key in ['trials', 'ts']}
@@ -410,6 +417,12 @@ class DataSet(ABC):
 
     def at_session_cap(self, multi_sessions):
 
+        ''''
+        Check whether number of sessions for a given mouse has reached a given
+        session cap (max number of sessions per mouse to load). If no session
+        cap provided, return false and load all data.
+        '''
+
         if self.session_cap is None:
             return False
 
@@ -418,13 +431,13 @@ class DataSet(ABC):
 
         return False
 
-
     def eval_photo_sig(self, ts):
 
         '''
         Run QC on photometry channels, filtering out data from sessions
         where full session lacked real signal.
         '''
+
         # If no photometry channels passed QC, move on to next session.
         sensor = self.cohort.get(self.mouse_)
         if self.qc_photo:
@@ -453,8 +466,8 @@ class DataSet(ABC):
     def get_sampling_freq(self, timestamps=None):
 
         '''
-        Calculate a sampling frequency based on the interval between timesteps in
-        timeseries.
+        Calculate a sampling frequency based on the interval between timesteps
+        in timeseries.
 
         Args:
             timestamps:
@@ -510,6 +523,10 @@ class DataSet(ABC):
 
     def downcast_dtypes(self):
 
+        '''
+        Downcast columns in trial and timeseries dataframes by datatype if
+        possible.
+        '''
         self.trials = downcast_all_numeric(self.trials)
         self.ts = downcast_all_numeric(self.ts)
         self.ts = cast_object_to_category(self.ts)
@@ -533,7 +550,7 @@ class ProbHFPhotometry(DataSet):
         if 'celia' in getpass.getuser().lower():
             root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
         else:
-            raise NotImplementedError('Need path for user with ProbHFPhotometry')
+            raise NotImplementedError('Need path for ProbHFPhotometry')
         return root
 
     def set_data_path(self):
@@ -553,6 +570,8 @@ class ProbHFPhotometry(DataSet):
         return channels
 
     def cleanup_cols(self, df_dict):
+
+        '''Remove unnecessary columns to minimize memory usage.'''
 
         # Drop columns that aren't typically accessed for analysis but were
         # necessary for preprocessing.
@@ -611,7 +630,11 @@ class ProbHFPhotometry(DataSet):
 
         ts['flag_ooo'] = np.nan
         ts.loc[ooo.index, 'flag_ooo'] = 1
-        post_ooo = ts.query('nTrial.isin(@ooo_trials)').groupby('nTrial')['flag_ooo'].ffill(1).sum()
+        post_ooo = (ts
+                    .query('nTrial.isin(@ooo_trials)')
+                    .groupby('nTrial')['flag_ooo']
+                    .ffill(1)
+                    .sum())
         assert (ooo['ENLP'].all()) & (~any(ooo[['Cue', 'Select', 'Consumption', 'ENL']].any())), (
                'events out of order beyond ENLP edge cases')
         assert post_ooo == len(ooo), (
@@ -689,7 +712,7 @@ class DeterministicData(DataSet):
         if 'celia' in getpass.getuser().lower():
             root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/headfixed_DAB_data/Ally_data/rDA')
         else:
-            raise NotImplementedError('Need path for user with DeterministicData')
+            raise NotImplementedError('Need path DeterministicData')
         return root
 
     def set_data_path(self):
@@ -722,7 +745,8 @@ class DeterministicData(DataSet):
     def set_trials_path(self):
 
         file_path = self.set_session_path()
-        trials_path = file_path / f'{self.mouse_}_{self.session_}_behavior_df_full.csv'
+        fname = f'{self.mouse_}_{self.session_}_behavior_df_full.csv'
+        trials_path = file_path / fname
         return trials_path
 
     def sessions_to_load(self,
@@ -748,7 +772,7 @@ class DeterministicData(DataSet):
         session_log = pd.read_excel(self.summary_path, engine='openpyxl')
         session_log = session_log.query('Mouse == @self.mouse_')
         sessions = list(set(session_log.Date.values))
-        sessions = ['20' + '_'.join(a + b for a, b in zip(*[iter(str(s_))] * 2))
+        sessions = ['20'+'_'.join(a + b for a, b in zip(*[iter(str(s_))] * 2))
                     for s_ in sessions]
         return sessions
 
@@ -773,7 +797,7 @@ class SplitConditions(DataSet):
         if 'celia' in getpass.getuser().lower():
             root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
         else:
-            raise NotImplementedError('Need path for user with SplitConditions')
+            raise NotImplementedError('Need path for SplitConditions')
         return root
 
     def set_data_path(self):
