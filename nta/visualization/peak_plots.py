@@ -27,6 +27,47 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
                        states: list = None,
                        **kwargs):
 
+    '''
+    Plot panel of photometry summary statistic figures, with subplot for each
+    aligned event, potentially split by reward outcome.
+
+    Args:
+        peaks:
+            Trial-based data containing summary statistic for event-aligned
+            photometry.
+        x_col:
+            Column name of variable to plot on x-axis of each subplot.
+        channel:
+            L or R hemisphere photometry channel.
+        metrics:
+            Summary statistic to plot, treated as suffix of column along with
+            channel.
+        plot_func:
+            Seaborn plotting function, commonly:
+                sns.barplot(),
+                sns.pointplot(),
+                sns.violinplot()
+        show_outliers:
+            Whether or not to show outliers in plot. Defaults to True.
+        plot_func_kws:
+            Kwargs recognized by plot_func(). Includes arguments like `hue`,
+            `palette`, etc.
+        mosaic_kws:
+            See initialize_peak_fig(); kwargs recognized by subplot_mosaic().
+        ignore_reward:
+            Whether or not to plot rewarded and unrewarded trials separately
+            for Consumption metrics.
+        states:
+            Task states to include summary statistics for in plot, defaults to
+            Cue and Consumption.
+        **kwargs:
+            See plot_trial_type_comparison().
+
+    Returns:
+        fig, axs:
+            Figure and axes objects containing created and filled plot.
+    '''
+
     if plot_func_kws is None:
         plot_func_kws = {}
     if mosaic_kws is None:
@@ -42,12 +83,15 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
         states = ['Consumption', 'Cue']
     if isinstance(metrics, str):
         metrics = {state: metrics for state in states}
-        if not ignore_reward and 'Consumption' in states:
+        if not ignore_reward and ('Consumption' in states):
             metrics['no reward'] = metrics['Consumption']
             metrics['reward'] = metrics['Consumption']
 
     ax_modifiers = {0: 'no ', 1: ''}
     for state in states:
+
+        # For Cue, of if ignore_reward then also for Consumption, plot
+        # photometry metric vs. x_col for all trials.
         if (state != 'Consumption') or ignore_reward:
             metric = metrics[state]
             y_col = f'{state}_{channel}_{metric}'
@@ -58,6 +102,8 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
             if (state != 'Consumption') or ignore_reward:
                 plot_func(data=peaks, x=x_col, y=y_col, ax=ax[state],
                           **plot_func_kws)
+
+        # Split consumption trials into rewarded and unrewarded.
         else:
             for reward_id, reward_group in peaks.groupby('Reward'):
                 label = f'{ax_modifiers[reward_id]}reward'
@@ -73,6 +119,8 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 
     ax = config_plot(ax, channel, metrics, **kwargs)
 
+    # If x-axis variable and hue are different, recolor plot for x-variable
+    # and use hatching for hue variable.
     if x_col != plot_func_kws.get('hue', x_col):
         ax = hatch_and_recolor(ax, peaks, x_col, **kwargs)
 
@@ -151,6 +199,8 @@ def initialize_peak_fig(states,
 def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
                       **kwargs):
 
+    '''Recolor plot for x-variable and use hatching for hue variable.'''
+
     import matplotlib.patches as mpatches
 
     hatch_styles = {0: '', 1: '//', 2: '+', 3: '*'}
@@ -168,8 +218,10 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
             bar.set_alpha(0.8)
             bar.set_edgecolor('k')
 
-    legend_elements = [mpatches.Patch(facecolor='white', edgecolor='k',
-                                      label=hatch_labels.get(k), hatch=hatch_styles.get(k))
+    legend_elements = [mpatches.Patch(facecolor='white',
+                                      edgecolor='k',
+                                      label=hatch_labels.get(k),
+                                      hatch=hatch_styles.get(k))
                        for k in hatch_labels]
     axs['reward'].legend(handles=legend_elements, bbox_to_anchor=(1, 1))
 
@@ -206,6 +258,11 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
 
 def set_color_palette(peaks, x_col, palette=None, hue=None, **kwargs):
 
+    '''
+    Set color palette, defaulting to using x-axis variable to color if no hue
+    is provided.
+    '''
+
     if hue is None:
         hue_col = x_col
     else:
@@ -228,15 +285,20 @@ def set_color_palette(peaks, x_col, palette=None, hue=None, **kwargs):
     return palette
 
 
-def exclude_outliers(peaks, x_col, y_col):
+def exclude_outliers(peaks: pd.DataFrame,
+                     x_col: str,
+                     y_col: str) -> pd.DataFrame:
 
+    '''
+    Remove outliers from distribution of y variable for each x variable.
+    '''
     def get_num_outliers(column):
-
+        '''Count number of outliers in distribution.'''
         outliers = 1 - not_outlier(column)
         print(f'{round(np.mean(outliers),3)} points removed as outliers')
 
     def not_outlier(column):
-
+        '''Return boolean of whether each value in distribution is otulier.'''
         q1 = np.percentile(column, 25)
         q3 = np.percentile(column, 75)
         iqr = q3 - q1
@@ -259,7 +321,8 @@ def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
 
     try:
         ax['reward'].set(xlabel='')
-        ticks = [int(ax['Cue'].get_xticks()[0]), int(ax['Cue'].get_xticks()[-1])]
+        ticks = [int(ax['Cue'].get_xticks()[0]),
+                 int(ax['Cue'].get_xticks()[-1])]
 
         ax['Cue'].set(xlabel=col_id, ylabel=ylab, xticks=ticks)
         ax['reward'].set(xlabel='', ylabel=ylab, xticks=ticks)
