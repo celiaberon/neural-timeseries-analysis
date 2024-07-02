@@ -115,6 +115,7 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
                     if len(trials.dropna(subset=[f'{event}_{ch}'])) > 0]
 
     channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
+
     # Iteratively fill subplots with each event-alignd photometry trace.
     for plot_iter, ch in enumerate(sig_channels, start=1):
         n_iters = [len(sig_channels), plot_iter - 1]
@@ -157,9 +158,9 @@ def set_new_axes(n_iters: list,
     subplots total. Arrange for including behavior distributions if specified.
 
     Args:
-        n_iters (list):
+        n_iters:
             [total number of subplot groups, current subplot group]
-        behavior_hist (bool):
+        behavior_hist:
             Whether or not to plot behavior distributions.
         figsize:
             (width, height) dimensions.
@@ -200,9 +201,7 @@ def set_current_axes(axs,
                      behavior_hist: bool = None,
                      ):
 
-    '''
-    Select current subplot axes for lineplot and behavior distributions
-    '''
+    '''Select current subplot axes for lineplot and behavior distributions.'''
 
     ncols = min(n_iters[0], 3)
 
@@ -263,7 +262,8 @@ def config_plot_cpal(ts, column, *, cmap_colors=None, **kwargs):
         case (dict() | list()):  # Use palette if given explicitly
             cpal = cmap_colors
         case str():
-            cpal = sns.color_palette(cmap_colors, n_colors=ts[column].nunique())
+            cpal = sns.color_palette(cmap_colors,
+                                     n_colors=ts[column].nunique())
 
         case _:
             cpal = sns.color_palette('deep', n_colors=ts[column].nunique())
@@ -324,10 +324,8 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
             ...
 
     Returns:
-        fig:
-            New/updated figure object.
-        axs:
-            New/updated axes object.
+        fig, axs:
+            New/updated figure and axes objects.
     '''
 
     sns.set(style='ticks', font_scale=1.0, rc={'axes.labelsize': 11,
@@ -451,7 +449,10 @@ def label_legend_unique_handles(ax, **kwargs):
     return ax
 
 
-def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, discrete_cpal=False, anchor=(1.3, 0), **kwargs):
+def convert_leg_to_cbar(fig, ax, labels=None, cpal=None,
+                        discrete_cpal: bool = False,
+                        anchor=(1.3, 0),
+                        **kwargs):
 
     '''
     Create colorbar to replace legend. Should be called for sequential,
@@ -465,6 +466,12 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None, discrete_cpal=False, an
         cpal:
             Color palette containing at least color values, but ideally
             pre-connected to color labels.
+        discrete_cpal:
+            For discrete (or categorical) variables on colorbar, which requires
+            different handling of values spanning zero.
+        anchor:
+            Argument passed to plt.colorbar(), controls position.
+
     Returns:
         fig, ax:
             Figure and axis objects with added colorbar and removed legend.
@@ -515,10 +522,31 @@ def behavior_event_distributions(ts,
                                  y_col,
                                  ax,
                                  *,
-                                 graded_cue: bool = False,
+                                 by_condition: bool = False,
                                  show_leg: bool = False,
                                  **kwargs):
 
+    '''
+    Plot distribution of behavior event timings relative to trial-averaged
+    photometry.
+    Args:
+        ts:
+            Timeseries dataframe.
+        y_col:
+            Event-aligned fluorescene column, used to extract which event
+            trial-averaged trace is aligned to, and therefore which event to
+            which all behavior distributions should be aligned.
+        ax:
+            Matplotlib axis object on which to add timing distribution subplot.
+        by_condition:
+            Whether or not to color distributions (segregated) by the value of
+            a given variable.
+        show_leg:
+            True if legend should be included.
+    Returns:
+        ax:
+            Filled matplotlib axis object.
+    '''
     all_events_ts = kwargs.pop('lick_ts')
     all_events_ts = all_events_ts.query('nTrial.isin(@ts.nTrial.unique())')
     lick_times = get_lick_times(lick_ts=all_events_ts, **kwargs)
@@ -551,7 +579,7 @@ def behavior_event_distributions(ts,
     ylim_ub = []
     for event in ['Cue', 'Select', 'Consumption']:
 
-        if graded_cue:
+        if by_condition:
             raise NotImplementedError
             # plotting_kwargs = {'hue': column, 'palette': kwargs.get('cpal')}
             # ts_ = ts.copy().groupby('nTrial')[column].nth(0)
