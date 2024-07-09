@@ -490,17 +490,34 @@ def split_penalty_states(ts, penalty='ENLP', cuep_ref_enl=False):
 
     return ts_
 
-
+@single_session
 def flag_blocks_for_timeouts(trials, threshold=0.25):
 
     '''
     Flag any blocks with >threshold proportion of timeout trials (i.e.
     'timeout_blocks'). Also flag blocks, starting with first and last blocks
     as a rule and extending through any consecutive blocks with excessive
-    timeouts.
+    timeouts ('flag_block').
+
+    Args:
+        trials:
+            Trial-based dataframe.
+        threshold:
+            Fraction of timeouts within block as (N timeouts / N trials) above
+            which a block will be flagged.
     '''
     trials_ = trials.copy()
-    # flag first and last block, and recursively flag n-1 continuous blocks
+
+    # Report on any block with timeouts above threshold.
+    trials_['timeout_block'] = False
+    for i, block in trials_.groupby('iBlock'):
+        above_thresh = np.mean(block.timeout) > threshold
+        trials_.loc[trials_.iBlock == i, 'timeout_block'] = above_thresh
+
+    # Record the threshold being used.
+    trials_['timeout_thresh'] = threshold
+
+    # Flag first and last block, and recursively flag n-1 continuous blocks
     # of timeouts > threshold.
     trials_['flag_block'] = False
     trials_.loc[trials_.iBlock == trials_.iBlock.min(), 'flag_block'] = True
@@ -510,21 +527,12 @@ def flag_blocks_for_timeouts(trials, threshold=0.25):
     continue_search = True
     while continue_search:
         curr_block = trials_.query('iBlock == @block_search')
-        # If timeouts exceed threshold for timeouts
+        # If timeouts exceed threshold for timeouts.
         if np.mean(curr_block.timeout) > threshold:
             trials_.loc[trials_.iBlock == block_search, 'flag_block'] = True
             block_search -= 1
         else:
             continue_search = False
-
-    # Also report on any block with timeouts above threshold.
-    trials_['timeout_block'] = False
-    for i, block in trials_.groupby('iBlock'):
-        above_thresh = np.mean(block.timeout) > threshold
-        trials_.loc[trials_.iBlock == i, 'timeout_block'] = above_thresh
-
-    # record the threshold being used.
-    trials_['timeout_thresh'] = threshold
 
     return trials_
 
