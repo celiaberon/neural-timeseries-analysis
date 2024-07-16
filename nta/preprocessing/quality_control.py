@@ -148,7 +148,8 @@ def QC_session_performance(trials: pd.DataFrame,
     condition_perf_thresh = {9010: 0.7,
                              '9010': 0.7,
                              8020: 0.6,
-                             '8020': 0.6}
+                             '8020': 0.6,
+                             '100-1': 0.7}
     TARGET_AVG = condition_perf_thresh.get(trials.Condition.unique()[0])
     SIDE_BIAS = 0.1
     SPOUT_BIAS = 0.15
@@ -190,6 +191,9 @@ def QC_session_performance(trials: pd.DataFrame,
                                    'enl_penalty_rate': round(enlp_rate, 2),
                                    'Pass': criteria_met},
                                   index=[0])
+    if kwargs.get('fname_suffix') == 'Kevin':
+        for col in ['Condition', 'age_at_session', 'Age_Group', 'retrained']:
+            qc_summary[col] = get_sess_val(trials, col)
 
         save_session_log(qc_summary, **kwargs)
 
