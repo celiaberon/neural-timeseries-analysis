@@ -41,7 +41,7 @@ def QC_included_trials(ts: pd.DataFrame,
             Contain only identical trial sets.
     '''
 
-    assert ts.session.dropna().nunique() == 1, (
+    assert ts.Session.dropna().nunique() == 1, (
         'multi-session not implemented')
     assert trials.Session.dropna().nunique() == 1, (
         'multi-session not implemented')
@@ -349,19 +349,25 @@ def is_normal(ts, include_score=False, verbose=False, thresh_score=0,
 
     thresholds = {'grabda_vls': (0.5, 0.8),
                   'grabda_dms': (0.1, 0.2),
+                  'grabda_kev': (0.1, 0.2),
                   'rDA': (0.5, 0.8)}
 
     skew_thresh, kurt_thresh = thresholds.get(sensor)
 
-    skew = np.abs(ts.skew()) < skew_thresh
-    kurtosis = np.abs(ts.kurtosis()) < kurt_thresh
+    # Should be a bit skewed (although for DA not necessarily a lot).
+    skew = np.abs(ts.skew()) < skew_thresh  # True when fails
+    kurtosis = np.abs(ts.kurtosis()) < kurt_thresh  # True when fails
 
     rand_normal = np.random.normal(0, np.nanstd(ts), len(ts))
     _, p_value = scipy.stats.ks_2samp(ts, rand_normal, alternative="two-sided")
 
-    ks_test = p_value > 0.05
+    ks_test = p_value > 0.05  # True when fails
 
-    score = sum((skew, kurtosis, ks_test))
+    # Check for any odd peak in counts (usually at 0, corresponding to noise).
+    counts, _ = np.histogram(ts.dropna(), bins=500)
+    smooth_counts = any(np.diff(counts)[5:] > 1000)
+
+    score = sum((skew, kurtosis, ks_test, smooth_counts))
     # print(skew, kurtosis, ks_test)
 
     result = score > thresh_score
