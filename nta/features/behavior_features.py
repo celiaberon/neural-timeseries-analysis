@@ -266,7 +266,7 @@ def add_timeseries_clock(timeseries: pd.DataFrame,
             Column of clock times (in seconds) for each row in the timeseries.
     '''
 
-    if timeseries.session.dropna().nunique() > 1:
+    if timeseries['Session'].dropna().nunique() > 1:
         raise NotImplementedError
 
     ts_ = timeseries.copy()
@@ -585,7 +585,7 @@ def add_behavior_cols(trials: pd.DataFrame,
     if isinstance(timeseries, pd.DataFrame):
         ts_ = timeseries.copy()
         if 'Mouse' not in ts_.columns:
-            ts_['Mouse'] = [sess[:3] for sess in ts_.session.values]
+            ts_['Mouse'] = [sess[:3] for sess in ts_['Session'].values]
 
     assert trials_.Session.dropna().nunique() == 1  # because of row shifting
 

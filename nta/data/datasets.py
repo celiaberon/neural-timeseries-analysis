@@ -17,10 +17,11 @@ from ..utils import (cast_object_to_category, downcast_all_numeric,
                      load_config_variables)
 
 
-class DataSet(ABC):
+class Dataset(ABC):
 
     def __init__(self,
                  mice: str | list[str],
+                 user: str = 'celia',
                  verbose: bool = False,
                  qc_photo: bool = True,
                  qc_params: dict = {},
@@ -30,6 +31,7 @@ class DataSet(ABC):
                  session_cap: int = None):
 
         self.mice = mice
+        self.user = user
         self.verbose = verbose
         self.qc_photo = qc_photo
         self.label = label if label else self.mice
@@ -167,7 +169,7 @@ class DataSet(ABC):
                         'Mouse': 'object',
                         'Date': 'object',
                         'Session': 'object',
-                        'Condition': np.int16,
+                        'Condition': 'object',
                         'tSelection': np.int16,
                         'direction': np.float32,
                         'Reward': np.float32,
@@ -202,6 +204,9 @@ class DataSet(ABC):
             'session': 'object',
             'fs': np.float16}
 
+        if self.user != 'celia':  # updated naming of session column
+            ts_dtypes['Session'] = ts_dtypes.pop('session')
+
         usecols = list(ts_dtypes.keys())
         usecols.extend(['z_grnL', 'z_grnR'] + list(self.ts_add_cols))
 
@@ -210,6 +215,9 @@ class DataSet(ABC):
             try:
                 ts = (pd.read_parquet(ts_path, columns=usecols)
                         .astype(ts_dtypes))
+                # Create session column to match across dataframes.
+                if 'session' in ts.columns:
+                    ts = ts.rename(columns={'session': 'Session'})
                 return ts, trials
             except ValueError as e:
                 # Extract the missing column name from the error message.
@@ -253,10 +261,16 @@ class DataSet(ABC):
         '''
 
         session_log = pd.read_csv(self.summary_path)
+        if not isinstance(QC_pass, list):
+            QC_pass = [QC_pass]
+        if isinstance(probs, list):
+            probs = [str(p) for p in probs]
+        else:
+            probs = [str(probs)]
         probs = str(probs) if not isinstance(probs, str) else probs
         session_log = session_log.query('Mouse == @self.mouse_ \
-                                        & Condition == @probs \
-                                        & Pass == @QC_pass')
+                                        & Condition.isin(@probs) \
+                                        & Pass.isin(@QC_pass)')
         return sorted(list(set(session_log.Date.values)))
 
     def get_max_trial(self, full_sessions: dict) -> int:
@@ -281,7 +295,6 @@ class DataSet(ABC):
             max_trial = max_trial_trials
         except AttributeError:
             max_trial = 0
-
         return max_trial
 
     def concat_sessions(self,
@@ -314,8 +327,8 @@ class DataSet(ABC):
                 ss_vals['nTrial_orig'] = ss_vals['nTrial'].copy()
 
             # Create session column to match across dataframes.
-            if 'session' in ss_vals.columns:
-                ss_vals = ss_vals.rename(columns={'session': 'Session'})
+            # if 'session' in ss_vals.columns:
+            #     ss_vals = ss_vals.rename(columns={'session': 'Session'})
             if 'Session' not in ss_vals.columns:
                 ss_vals['Session'] = '_'.join([self.mouse_, self.session_])
 
@@ -533,17 +546,18 @@ class DataSet(ABC):
         self.trials = cast_object_to_category(self.trials)
 
 
-class ProbHFPhotometry(DataSet):
+class ProbHFPhotometry(Dataset):
 
     def __init__(self,
-                 mice: str | list[str],
+                #  mice: str | list[str],
+                #  user: str = 'celia',
                  **kwargs):
 
         assert 'celia' in getpass.getuser().lower(), (
-            'Please write your own DataSet class')
+            'Please write your own Dataset class')
 
-        super().__init__(mice, **kwargs)
-        self.dataset = 'celia'
+        super().__init__(**kwargs)
+        # self.user = user
 
     def set_root(self):
         '''Sets the root path for the dataset'''
@@ -555,11 +569,21 @@ class ProbHFPhotometry(DataSet):
 
     def set_data_path(self):
         '''Sets the path to the session data'''
-        return self.root / 'headfixed_DAB_data/preprocessed_data'
+        match self.user:
+            case 'celia':
+                prefix = self.root / 'headfixed_DAB_data'
+            case 'kevin':
+                prefix = self.root / 'headfixed_DAB_data/Kevin_data'
+        return prefix / 'preprocessed_data'
 
     def set_data_overview_path(self):
         '''Sets the path to the csv containing session summary'''
-        return self.root / 'data_overviews' / 'session_log_all_cohorts.csv'
+        match self.user:
+            case 'celia':
+                fname = 'session_log_all_cohorts.csv'
+            case 'kevin':
+                fname = 'session_log_Kevin.csv'
+        return self.root / 'data_overviews' / fname
 
     def set_session_path(self):
         '''Sets path to single session data'''
@@ -647,12 +671,16 @@ class ProbHFPhotometry(DataSet):
 
 class ProbHFPhotometryTails(ProbHFPhotometry):
 
+    '''
+    Bypasses standard session trimming to include all data, even at beginning
+    and end of a session.
+    '''
     def __init__(self,
                  mice: str | list[str],
                  **kwargs):
 
         assert 'celia' in getpass.getuser().lower(), (
-            'Please write your own DataSet class')
+            'Please write your own Dataset class')
 
         super().__init__(mice, **kwargs)
 
@@ -697,7 +725,7 @@ class ProbHFPhotometryTails(ProbHFPhotometry):
         return multi_sessions
 
 
-class DeterministicData(DataSet):
+class DeterministicData(Dataset):
 
     def __init__(self,
                  mice: str | list[str],
@@ -783,7 +811,7 @@ class DeterministicData(DataSet):
         return trials, ts
 
 
-class SplitConditions(DataSet):
+class SplitConditions(Dataset):
 
     def __init__(self,
                  mice: str | list[str],
