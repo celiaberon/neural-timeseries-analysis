@@ -333,20 +333,29 @@ def get_tdt_streams(tdt_data, sig_thresh: float = 0.05
             'photom_r': 3}
 
     # fibers = {'right': 1, 'left': 2}  # just as a note
+
+    # First fiber, measured carriers.
     carrier_g_right = tdt_data.streams.Fi1r.data[idcs.get("carrier_g", None)]
     carrier_r_right = tdt_data.streams.Fi1r.data[idcs.get("carrier_r", None)]
+    # First fiber, measured signal.
     photom_g_right = tdt_data.streams.Fi1r.data[idcs.get("photom_g", None)]
     photom_r_right = tdt_data.streams.Fi1r.data[idcs.get("photom_r", None)]
+    # First fiber, input carriers by channel.
+    # Note, scalars seems to take a sample every time one of the input
+    # variables is changed, so we want to take the last sample point as the
+    # state in which the experiment was run?
+    carrier_val_g_right = tdt_data.scalars.Fi1i.data[1][-1]
+    carrier_val_r_right = tdt_data.scalars.Fi1i.data[4][-1]
 
+    # Second fiber, measured carriers.
     carrier_g_left = tdt_data.streams.Fi2r.data[idcs.get("carrier_g", None)]
     carrier_r_left = tdt_data.streams.Fi2r.data[idcs.get("carrier_r", None)]
+    # Second fiber, measured signal.
     photom_g_left = tdt_data.streams.Fi2r.data[idcs.get("photom_g", None)]
     photom_r_left = tdt_data.streams.Fi2r.data[idcs.get("photom_r", None)]
-
-    carrier_val_g_right = tdt_data.scalars.Fi1i.data[1][0]
-    carrier_val_r_right = tdt_data.scalars.Fi1i.data[4][0]
-    carrier_val_g_left = tdt_data.scalars.Fi2i.data[1][0]
-    carrier_val_r_left = tdt_data.scalars.Fi2i.data[4][0]
+    # Second fiber, input carriers by channel.
+    carrier_val_g_left = tdt_data.scalars.Fi2i.data[1][-1]
+    carrier_val_r_left = tdt_data.scalars.Fi2i.data[4][-1]
 
     # Get trace names and store in this list for ingestion
     labels = np.array(('grnR', 'redR', 'grnL', 'redL'))
@@ -398,6 +407,9 @@ def calc_carrier_freq(raw_carrier_sigs: list[int | float],
     calc_carrier_freqs = []
 
     for carrier in raw_carrier_sigs:
+
+        system_on = np.where(carrier != 0)[0][0]
+        carrier = carrier[system_on:]
 
         start_idx = len(carrier) // 4
         fft_carrier = abs(np.fft.fft(carrier[start_idx:start_idx + n_points]))
