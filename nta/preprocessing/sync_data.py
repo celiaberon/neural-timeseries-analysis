@@ -34,7 +34,7 @@ def set_analog_headers(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
     mode_values, mode_counts = st.mode(ts_, keepdims=False)
     cols_in_play = [(i, val, count) for i, (val, count)
                     in enumerate(zip(mode_values, mode_counts))
-                    if val in [30, 53]]
+                    if val in [30, 48, 53]]
     cols_in_play.sort(key=lambda x: x[2], reverse=True)
     state_columns = [i for i, _, _ in cols_in_play[:2]]
     state_columns.sort()
