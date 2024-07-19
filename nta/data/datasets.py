@@ -267,7 +267,6 @@ class Dataset(ABC):
             probs = [str(p) for p in probs]
         else:
             probs = [str(probs)]
-        probs = str(probs) if not isinstance(probs, str) else probs
         session_log = session_log.query('Mouse == @self.mouse_ \
                                         & Condition.isin(@probs) \
                                         & Pass.isin(@QC_pass)')
