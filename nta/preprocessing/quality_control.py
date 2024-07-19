@@ -365,22 +365,20 @@ def is_normal(ts, include_score=False, verbose=False, thresh_score=0,
 
     # Check for any odd peak in counts (usually at 0, corresponding to noise).
     counts, _ = np.histogram(ts.dropna(), bins=500)
-    smooth_counts = any(np.diff(counts)[5:] > 1000)
+    smooth_counts = any(np.diff(counts)[5:] > 200)
 
     score = sum((skew, kurtosis, ks_test, smooth_counts))
     # print(skew, kurtosis, ks_test)
 
     result = score > thresh_score
 
+    if verbose:
+        print(f'skew = {np.abs(ts.skew())}\n',
+              f'kurtosis = {np.abs(ts.kurtosis())}\n',
+              f'p_value = {p_value}\n',
+              f'dist diff max = {np.max(np.abs(np.diff(counts)[5:]))}\n',
+        )
     if include_score:
-        if verbose:
-            print(f'skew = {np.abs(ts.skew())}\n',
-                  f'kurtosis = {np.abs(ts.kurtosis())}\n',
-                  f'p_value = {p_value}')
         return result, score
     else:
-        if verbose:
-            print(f'skew = {np.abs(ts.skew())}\n',
-                  f'kurtosis = {np.abs(ts.kurtosis())}\n',
-                  f'p_value = {p_value}')
         return result

@@ -345,7 +345,7 @@ def get_tdt_streams(tdt_data, sig_thresh: float = 0.05
     # variables is changed, so we want to take the last sample point as the
     # state in which the experiment was run?
     carrier_val_g_right = tdt_data.scalars.Fi1i.data[1][-1]
-    carrier_val_r_right = tdt_data.scalars.Fi1i.data[4][-1]
+    carrier_val_r_right = tdt_data.scalars.Fi1i.data[5][-1]
 
     # Second fiber, measured carriers.
     carrier_g_left = tdt_data.streams.Fi2r.data[idcs.get("carrier_g", None)]
@@ -355,7 +355,7 @@ def get_tdt_streams(tdt_data, sig_thresh: float = 0.05
     photom_r_left = tdt_data.streams.Fi2r.data[idcs.get("photom_r", None)]
     # Second fiber, input carriers by channel.
     carrier_val_g_left = tdt_data.scalars.Fi2i.data[1][-1]
-    carrier_val_r_left = tdt_data.scalars.Fi2i.data[4][-1]
+    carrier_val_r_left = tdt_data.scalars.Fi2i.data[5][-1]
 
     # Get trace names and store in this list for ingestion
     labels = np.array(('grnR', 'redR', 'grnL', 'redL'))
