@@ -197,7 +197,7 @@ def initialize_peak_fig(states,
 
 
 def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
-                      **kwargs):
+                      hatch_colors={0: 'white', 1: 'white'}, **kwargs):
 
     '''Recolor plot for x-variable and use hatching for hue variable.'''
 
@@ -218,7 +218,7 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
             bar.set_alpha(0.8)
             bar.set_edgecolor('k')
 
-    legend_elements = [mpatches.Patch(facecolor='white',
+    legend_elements = [mpatches.Patch(facecolor=hatch_colors.get(k),
                                       edgecolor='k',
                                       label=hatch_labels.get(k),
                                       hatch=hatch_styles.get(k))
