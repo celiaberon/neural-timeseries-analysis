@@ -550,6 +550,33 @@ def order_sessions(trials):
     return t_
 
 
+@single_session
+def match_state_left_right(df):
+
+    '''
+    Infer from empirical data which state is left or right and make sure
+    representation is consistent.
+    '''
+
+    df_ = df.copy()
+    # If mostly rewarded in direction 0 in state 0, then state 0 = direction 0.
+    if df_.query('State == 0 & direction == 0').Reward.mean() >= 0.65:
+        assert df_.query('State == 1 & direction == 1').Reward.mean() >= 0.65
+
+    # Otherwise, state 1 = direction 0, but we want to state to be consistent
+    # with direction.
+    elif df_.query('State == 0 & direction == 1').Reward.mean() >= 0.65:
+        assert df_.query('State == 1 & direction == 0').Reward.mean() >= 0.65
+        print('flipping state left right for consistency')
+        df_['State'] = 1 - df_['State']
+
+    # Make sure we end up with the right mapping.
+    assert df_.query('State == 0 & direction == 0').Reward.mean() >= 0.65
+    assert df_.query('State == 1 & direction == 1').Reward.mean() >= 0.65
+
+    return df_
+
+
 def add_behavior_cols(trials: pd.DataFrame,
                       timeseries: pd.DataFrame = None,
                       fs: int = None) -> tuple:

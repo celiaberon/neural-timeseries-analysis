@@ -119,6 +119,11 @@ class Dataset(ABC):
         Column updates (feature definitions, etc.) that should apply to all
         datasets.
         '''
+
+        # Check for state labeling consistency.
+        trials = bf.match_state_left_right(trials)
+
+        # Add standard set of analysis columns.
         trials, ts = bf.add_behavior_cols(trials, ts)
         trials = trials.rename(columns={'-1reward': 'prev_rew'})
 
@@ -242,7 +247,8 @@ class Dataset(ABC):
 
     def sessions_to_load(self,
                          probs: int | str = 9010,
-                         QC_pass: bool = True) -> list:
+                         QC_pass: bool = True,
+                         **kwargs) -> list:
 
         '''
         Make list of sessions to include for designated mouse
@@ -267,9 +273,11 @@ class Dataset(ABC):
             probs = [str(p) for p in probs]
         else:
             probs = [str(probs)]
-        session_log = session_log.query('Mouse == @self.mouse_ \
-                                        & Condition.isin(@probs) \
-                                        & Pass.isin(@QC_pass)')
+
+        # Compose query.
+        q = f'Mouse == "{self.mouse_}" & Condition.isin({probs}) \
+            & Pass.isin({QC_pass})' + kwargs.get('query', '')
+        session_log = session_log.query(q)
         return sorted(list(set(session_log.Date.values)))
 
     def get_max_trial(self, full_sessions: dict) -> int:
