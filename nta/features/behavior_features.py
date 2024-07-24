@@ -567,12 +567,23 @@ def match_state_left_right(df):
     # with direction.
     elif df_.query('State == 0 & direction == 1').Reward.mean() >= 0.65:
         assert df_.query('State == 1 & direction == 0').Reward.mean() >= 0.65
-        print('flipping state left right for consistency')
         df_['State'] = 1 - df_['State']
 
     # Make sure we end up with the right mapping.
     assert df_.query('State == 0 & direction == 0').Reward.mean() >= 0.65
     assert df_.query('State == 1 & direction == 1').Reward.mean() >= 0.65
+
+    df_clean = df_.dropna(subset=['selHigh', 'State', 'direction'])
+    select_state = df_clean['State'] == df_clean['direction']
+    mismatch = np.where(df_clean.selHigh != (select_state))
+
+    # Permissable error level per session, but will convert to NaNs.
+    assert len(mismatch[0]) <= 3
+    if mismatch[0]:
+        print(df_clean.loc[np.where(df_clean.selHigh != (select_state))])
+
+        mismatch_idx = df_clean.iloc[mismatch].index.values
+        df_.loc[mismatch_idx, 'selHigh'] = np.nan
 
     return df_
 

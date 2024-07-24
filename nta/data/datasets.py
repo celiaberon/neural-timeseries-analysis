@@ -556,14 +556,14 @@ class Dataset(ABC):
 class ProbHFPhotometry(Dataset):
 
     def __init__(self,
-                #  mice: str | list[str],
+                 mice: str | list[str],
                 #  user: str = 'celia',
                  **kwargs):
 
         assert 'celia' in getpass.getuser().lower(), (
             'Please write your own Dataset class')
 
-        super().__init__(**kwargs)
+        super().__init__(mice, **kwargs)
         # self.user = user
 
     def set_root(self):
