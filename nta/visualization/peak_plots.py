@@ -121,7 +121,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 
     # If x-axis variable and hue are different, recolor plot for x-variable
     # and use hatching for hue variable.
-    if x_col != plot_func_kws.get('hue', x_col):
+    if (x_col != plot_func_kws.get('hue', x_col)) & (plot_func == sns.barplot):
         ax = hatch_and_recolor(ax, peaks, x_col, **kwargs)
 
     if kwargs.get('save'):
@@ -211,7 +211,7 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
     cpal = set_color_palette(peaks, x_col, palette=peaks[x_col].nunique())
 
     nbars = len(cpal)
-    for ax_ in [axs['Cue'], axs['reward'], axs['no reward']]:
+    for label, ax_ in axs.items():
         for i, bar in enumerate(ax_.patches):
             bar.set_hatch(hatch_styles[i // nbars])
             bar.set_facecolor(cpal[cpal_key(i, nbars)])
@@ -223,7 +223,7 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
                                       label=hatch_labels.get(k),
                                       hatch=hatch_styles.get(k))
                        for k in hatch_labels]
-    axs['reward'].legend(handles=legend_elements, bbox_to_anchor=(1, 1))
+    ax_.legend(handles=legend_elements, bbox_to_anchor=(1, 1))
 
     return axs
 
