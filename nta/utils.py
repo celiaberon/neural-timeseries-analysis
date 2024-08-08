@@ -2,9 +2,11 @@ import configparser
 import functools
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from IPython.core.magic import register_cell_magic
 
 
 def load_config_variables(path_to_file: str,
@@ -255,3 +257,19 @@ def cast_object_to_category(df):
         df[col] = df[col].astype('category')
 
     return df
+
+
+def loop_cell_adjust_legend(flag, sp_idx, ax, **kwargs):
+    if (sp_idx == 2) or (not flag):
+        ax.get_legend().set(**kwargs)
+    else:
+        ax.get_legend().remove()
+
+
+def loop_cell_create_axes(flag, figsize, ncols=3, nrows=1):
+    w, h = figsize
+    ncols = ncols if flag else 1
+    fig, axs = plt.subplots(ncols=ncols, nrows=nrows, figsize=(w * ncols, h * nrows), layout='constrained')
+    if not flag:
+        axs = [axs]
+    return fig, axs
