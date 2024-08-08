@@ -559,29 +559,34 @@ def match_state_left_right(df):
     '''
 
     df_ = df.copy()
+    df_clean = df_.copy().dropna(subset=['selHigh', 'State', 'direction'])
     # If mostly rewarded in direction 0 in state 0, then state 0 = direction 0.
-    if df_.query('State == 0 & direction == 0').Reward.mean() >= 0.65:
-        assert df_.query('State == 1 & direction == 1').Reward.mean() >= 0.65
+    if df_clean.query('State == 0 & direction == 0').Reward.mean() >= 0.65:
+        assert df_clean.query('State == 1 & direction == 1').Reward.mean() >= 0.65
 
     # Otherwise, state 1 = direction 0, but we want to state to be consistent
     # with direction.
-    elif df_.query('State == 0 & direction == 1').Reward.mean() >= 0.65:
-        assert df_.query('State == 1 & direction == 0').Reward.mean() >= 0.65
+    elif df_clean.query('State == 0 & direction == 1').Reward.mean() >= 0.65:
+        assert df_clean.query('State == 1 & direction == 0').Reward.mean() >= 0.65
         df_['State'] = 1 - df_['State']
 
+    # Update df_clean with correct state values.
+    df_clean = df_.copy().dropna(subset=['selHigh', 'State', 'direction'])
     # Make sure we end up with the right mapping.
-    assert df_.query('State == 0 & direction == 0').Reward.mean() >= 0.65
-    assert df_.query('State == 1 & direction == 1').Reward.mean() >= 0.65
+    # print('0: ', df_clean.query('State == 0 & direction == 0').Reward.mean())
+    # print('1: ', df_clean.query('State == 1 & direction == 1').Reward.mean())
 
-    df_clean = df_.dropna(subset=['selHigh', 'State', 'direction'])
+    assert df_clean.query('State == 0 & direction == 0').Reward.mean() >= 0.65, (
+        f'{df.Session.iloc[0]} fails state mapping')
+    assert df_clean.query('State == 1 & direction == 1').Reward.mean() >= 0.65, (
+        f'{df.Session.iloc[0]} fails state mapping')
+
     select_state = df_clean['State'] == df_clean['direction']
     mismatch = np.where(df_clean.selHigh != (select_state))
 
     # Permissable error level per session, but will convert to NaNs.
     assert len(mismatch[0]) <= 3
     if mismatch[0]:
-        print(df_clean.loc[np.where(df_clean.selHigh != (select_state))])
-
         mismatch_idx = df_clean.iloc[mismatch].index.values
         df_.loc[mismatch_idx, 'selHigh'] = np.nan
 
