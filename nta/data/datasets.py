@@ -214,6 +214,7 @@ class Dataset(ABC):
 
         usecols = list(ts_dtypes.keys())
         usecols.extend(['z_grnL', 'z_grnR'] + list(self.ts_add_cols))
+        usecols = list(set(usecols))
 
         # Load timeseries data but be forgiving about missing columns.
         while usecols:
@@ -275,9 +276,13 @@ class Dataset(ABC):
             probs = [str(probs)]
 
         # Compose query.
+        session_log_mouse = session_log.query(f'Mouse == "{self.mouse_}" & Condition.isin({probs})')
         q = f'Mouse == "{self.mouse_}" & Condition.isin({probs}) \
             & Pass.isin({QC_pass})' + kwargs.get('query', '')
         session_log = session_log.query(q)
+        if self.verbose:
+            print(f'{self.mouse_}: {len(session_log)} of',
+                  f' {len(session_log_mouse)} sessions meet criteria')
         return sorted(list(set(session_log.Date.values)))
 
     def get_max_trial(self, full_sessions: dict) -> int:
