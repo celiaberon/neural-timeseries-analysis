@@ -444,13 +444,35 @@ def apply_trial_rep_threshold(trials, col, min_reps=100, by_outcome=False):
 def split_penalty_states(ts, penalty='ENLP', cuep_ref_enl=False):
 
     '''
-    Note: Can do this before photometry alignment now that using 23-29 as sync
-    pulse.
+    Relabel any state leading up to a penalty as a pre-penalty state (not the
+    true version of that state for the trial). Applies to ENL and Cue states
+    (as defined by a subsequent ENL or Cue penalty).
+
+    One tricky note is that Cue penalties force ENL periods to be reclassified,
+    even if there was no ENL penalty.
+
+    Another note: Can do this before photometry alignment now that using 23-29
+    as sync pulse.
+
+    Args:
+        ts:
+            Timeseries data.
+        penalty:
+            Which type of penalty is being referenced backwards from. Can be
+            ENLP or CueP.
+        cuep_ref_enl:
+            When False, normal behavior is splitting out state that is the same
+            type as the penalty (e.g. ENLs preceding ENLP and Cues preceding
+            CueP). When True, seperating full ENLs preceding CueP.
     '''
 
     def is_post_final_penalty(trial_ts, pen_state):
 
-        # last enl break is offset, second to last is onset of real enl.
+        '''
+        Boolean mask labeling which rows (samples) occur after the final
+        penalty (will be the true state).
+        '''
+        # Last enl break is offset, second to last is onset of real enl.
         true_enl_onset = np.where(trial_ts[pen_state].diff() != 0)[0][-2]
         enl_onset_time = trial_ts.iloc[true_enl_onset]['session_clock']
 
