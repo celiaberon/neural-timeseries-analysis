@@ -119,7 +119,6 @@ class Dataset(ABC):
         Column updates (feature definitions, etc.) that should apply to all
         datasets.
         '''
-
         # Check for state labeling consistency.
         trials = bf.match_state_left_right(trials)
 
@@ -128,13 +127,14 @@ class Dataset(ABC):
         trials = trials.rename(columns={'-1reward': 'prev_rew'})
 
         # Rectify error in penalty state allocation.
-        ts['ENL'] = ts['ENL'] + ts['state_ENLP']  # recover original state
+        # if self.user == 'celia':
+        ts['ENL'] = ts['ENL'] + ts['state_ENLP'] + ts.get('state_ENL_preCueP', 0)  # recover original state
         ts['Cue'] = ts['Cue'] + ts['CueP']  # recover original state
         ts = bf.split_penalty_states(ts, penalty='ENLP')
         ts = bf.split_penalty_states(ts, penalty='CueP')
         ts = bf.split_penalty_states(ts, penalty='CueP', cuep_ref_enl=True)
 
-        if 'trial_clock' in ts.columns:
+        if 'trial_clock' not in ts.columns:
             ts['trial_clock'] = 1 / ts['fs']
             ts['trial_clock'] = ts.groupby('nTrial', observed=True)['trial_clock'].cumsum()
 
@@ -161,38 +161,29 @@ class Dataset(ABC):
         trials_path = file_path / f'{self.mouse_}_trials.csv'
         return trials_path
 
-    def load_session_data(self):
-        '''Loads data from single session'''
-        trials_path = self.set_trials_path()
-        ts_path = self.set_timeseries_path()
+    def define_data_dtypes(self):
 
-        if not (ts_path.exists() & trials_path.exists()):
-            if self.verbose: print(f'skipped {self.mouse_} {self.session_}')
-            return None, None
-
-        trial_dtypes = {'nTrial': np.int32,
-                        'Mouse': 'object',
-                        'Date': 'object',
-                        'Session': 'object',
-                        'Condition': 'object',
-                        'tSelection': np.int16,
-                        'direction': np.float32,
-                        'Reward': np.float32,
-                        'T_ENL': np.int16,
-                        'n_ENL': np.int8,
-                        'n_Cue': np.int8,
-                        'State': np.float32,
-                        'selHigh': np.float32,
-                        'iBlock': np.int8,
-                        'blockLength': np.int8,
-                        'iInBlock': np.int8,
-                        'flag_block': 'bool',
-                        'timeout': 'bool',
-                        'Switch': np.float32}
-
-        usecols = list(trial_dtypes.keys())
-        trials = pd.read_csv(trials_path, index_col=None, dtype=trial_dtypes,
-                             usecols=usecols)
+        trial_dtypes = {
+            'nTrial': np.int32,
+            'Mouse': 'object',
+            'Date': 'object',
+            'Session': 'object',
+            'Condition': 'object',
+            'tSelection': np.int16,
+            'direction': np.float32,
+            'Reward': np.float32,
+            'T_ENL': np.int16,
+            'n_ENL': np.int8,
+            'n_Cue': np.int8,
+            'State': np.float32,
+            'selHigh': np.float32,
+            'iBlock': np.int8,
+            'blockLength': np.int8,
+            'iInBlock': np.int8,
+            'flag_block': 'bool',
+            'timeout': 'bool',
+            'Switch': np.float32
+        }
 
         ts_dtypes = {
             'session_clock': 'float',
@@ -207,10 +198,28 @@ class Dataset(ABC):
             'Consumption': np.int8,
             'state_ENLP': np.int8,
             'session': 'object',
-            'fs': np.float16}
+            'fs': np.float16
+        }
 
         if self.user != 'celia':  # updated naming of session column
             ts_dtypes['Session'] = ts_dtypes.pop('session')
+
+        return trial_dtypes, ts_dtypes
+
+    def load_session_data(self):
+        '''Loads data from single session'''
+        trials_path = self.set_trials_path()
+        ts_path = self.set_timeseries_path()
+
+        if not (ts_path.exists() & trials_path.exists()):
+            if self.verbose: print(f'skipped {self.mouse_} {self.session_}')
+            return None, None
+
+        trial_dtypes, ts_dtypes = self.define_data_dtypes()
+
+        usecols = list(trial_dtypes.keys())
+        trials = pd.read_csv(trials_path, index_col=None, dtype=trial_dtypes,
+                             usecols=usecols)
 
         usecols = list(ts_dtypes.keys())
         usecols.extend(['z_grnL', 'z_grnR'] + list(self.ts_add_cols))
@@ -276,7 +285,8 @@ class Dataset(ABC):
             probs = [str(probs)]
 
         # Compose query.
-        session_log_mouse = session_log.query(f'Mouse == "{self.mouse_}" & Condition.isin({probs})')
+        session_log_mouse = session_log.query(f'Mouse == "{self.mouse_}" \
+                                              & Condition.isin({probs})')
         q = f'Mouse == "{self.mouse_}" & Condition.isin({probs}) \
             & Pass.isin({QC_pass})' + kwargs.get('query', '')
         session_log = session_log.query(q)
@@ -370,11 +380,8 @@ class Dataset(ABC):
         '''
 
         multi_mice = {key: pd.DataFrame() for key in ['trials', 'ts']}
-
         for mouse in self.mice:
-
             self.mouse_ = mouse
-
             multi_sessions = self.read_multi_sessions(qc_params, **kwargs)
 
             if len(multi_sessions['trials']) < 1:
@@ -399,7 +406,6 @@ class Dataset(ABC):
             multi_sesions:
                 {'trials': trials data, 'timeseries': timeseries data}
         '''
-
         sessions = self.sessions_to_load(**qc_params)
         multi_sessions = {key: pd.DataFrame() for key in ['trials', 'ts']}
 
