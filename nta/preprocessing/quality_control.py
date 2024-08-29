@@ -164,7 +164,10 @@ def QC_session_performance(trials: pd.DataFrame,
                       .query('flag_block==False & timeout==False')['nTrial']
                       .nunique())
 
-    target_avg = trials.selHigh.mean()
+    if trials.Condition.unique() == '100-0':
+        target_avg = trials.Reward.mean()  # phigh = preward for deterministic
+    else:
+        target_avg = trials.selHigh.mean()
     if target_avg < TARGET_AVG:
         criteria_met = False
 
@@ -189,13 +192,14 @@ def QC_session_performance(trials: pd.DataFrame,
                                    'Pspout': round(spout_avg, 2),
                                    'N_valid_trials': n_valid_trials,
                                    'enl_penalty_rate': round(enlp_rate, 2),
-                                   'Pass': criteria_met},
+                                   'Pass': criteria_met,
+                                   'Preward': round(trials.Reward.mean(), 2)},
                                   index=[0])
     if kwargs.get('fname_suffix') == 'Kevin':
         for col in ['Condition', 'age_at_session', 'Age_Group', 'retrained']:
             qc_summary[col] = get_sess_val(trials, col)
 
-        save_session_log(qc_summary, **kwargs)
+    save_session_log(qc_summary, **kwargs)
 
     return criteria_met
 
