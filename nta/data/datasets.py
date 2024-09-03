@@ -41,13 +41,14 @@ class Dataset(ABC):
 
         # Set up paths and standard attributes.
         self.root = self.set_root()
+        self.config_path = self.set_config_path()
         self.data_path = self.set_data_path()
         self.summary_path = self.set_data_overview_path()
         self.save = save
         if self.save:
             self.save_path = self.set_save_path()
         self.cohort = self.load_cohort_dict()
-        self.palettes = load_config_variables(self.root)
+        self.palettes = load_config_variables(self.config_path)
         self.add_mouse_palette()
 
         # Initizalize attributes that will hold data.
@@ -79,6 +80,11 @@ class Dataset(ABC):
     @abstractmethod
     def set_root(self):
         '''Sets the root path for the dataset'''
+        pass
+
+    @abstractmethod
+    def set_config_path(self):
+        '''Sets the path to config file'''
         pass
 
     @abstractmethod
@@ -157,8 +163,12 @@ class Dataset(ABC):
 
     def set_trials_path(self):
         '''Set path to trial-level data file.'''
+
         file_path = self.set_session_path()
-        trials_path = file_path / f'{self.mouse_}_trials.csv'
+        if self.user != 'ally':
+            trials_path = file_path / f'{self.mouse_}_trials.csv'
+        else:
+            trials_path = file_path / 'photometry' / f'{self.mouse_}_trials.csv'
         return trials_path
 
     def define_data_dtypes(self):
@@ -760,6 +770,10 @@ class DeterministicData(Dataset):
         else:
             raise NotImplementedError('Need path DeterministicData')
         return root
+
+    def set_config_path(self):
+
+        return self.root
 
     def set_data_path(self):
         '''Sets the path to the session data'''
