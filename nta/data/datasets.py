@@ -133,7 +133,6 @@ class Dataset(ABC):
         trials = trials.rename(columns={'-1reward': 'prev_rew'})
 
         # Rectify error in penalty state allocation.
-        # if self.user == 'celia':
         ts['ENL'] = ts['ENL'] + ts['state_ENLP'] + ts.get('state_ENL_preCueP', 0)  # recover original state
         ts['Cue'] = ts['Cue'] + ts['CueP']  # recover original state
         ts = bf.split_penalty_states(ts, penalty='ENLP')
@@ -578,40 +577,13 @@ class ProbHFPhotometry(Dataset):
 
     def __init__(self,
                  mice: str | list[str],
-                #  user: str = 'celia',
                  **kwargs):
 
-        assert 'celia' in getpass.getuser().lower(), (
-            'Please write your own Dataset class')
-
         super().__init__(mice, **kwargs)
-        # self.user = user
 
-    def set_root(self):
-        '''Sets the root path for the dataset'''
-        if 'celia' in getpass.getuser().lower():
-            root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
-        else:
-            raise NotImplementedError('Need path for ProbHFPhotometry')
-        return root
-
-    def set_data_path(self):
-        '''Sets the path to the session data'''
-        match self.user:
-            case 'celia':
-                prefix = self.root / 'headfixed_DAB_data'
-            case 'kevin':
-                prefix = self.root / 'headfixed_DAB_data/Kevin_data'
-        return prefix / 'preprocessed_data'
-
-    def set_data_overview_path(self):
-        '''Sets the path to the csv containing session summary'''
-        match self.user:
-            case 'celia':
-                fname = 'session_log_all_cohorts.csv'
-            case 'kevin':
-                fname = 'session_log_Kevin.csv'
-        return self.root / 'data_overviews' / fname
+    def set_config_path(self):
+        '''Sets the path to config file'''
+        return self.root
 
     def set_session_path(self):
         '''Sets path to single session data'''
@@ -707,9 +679,6 @@ class ProbHFPhotometryTails(ProbHFPhotometry):
                  mice: str | list[str],
                  **kwargs):
 
-        assert 'celia' in getpass.getuser().lower(), (
-            'Please write your own Dataset class')
-
         super().__init__(mice, **kwargs)
 
     def read_multi_sessions(self,
@@ -761,27 +730,6 @@ class DeterministicData(Dataset):
         super().__init__(mice, **kwargs)
         self.dataset = 'ally'
         # self.channels = self.set_channels()
-
-    def set_root(self):
-        '''Sets the root path for the dataset'''
-
-        if 'celia' in getpass.getuser().lower():
-            root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/headfixed_DAB_data/Ally_data/rDA')
-        else:
-            raise NotImplementedError('Need path DeterministicData')
-        return root
-
-    def set_config_path(self):
-
-        return self.root
-
-    def set_data_path(self):
-        '''Sets the path to the session data'''
-        return self.root / 'output_ally_spect_demod_60sec_rolling_GrabRed'
-
-    def set_data_overview_path(self):
-        '''Sets the path to the csv containing session summary'''
-        return self.root / 'MasterPhotometrywithBehaviorSpecDemod_Ally_red.xlsx'
 
     def set_session_path(self):
         '''Sets path to single session data'''
@@ -851,14 +799,6 @@ class SplitConditions(Dataset):
         super().__init__(mice, **kwargs)
         self.dataset = 'dan'
         self.channels = self.set_channels()
-
-    def set_root(self):
-        '''Sets the root path for the dataset'''
-        if 'celia' in getpass.getuser().lower():
-            root = Path('/Volumes/Neurobio/MICROSCOPE/Celia/data/lickTask/')
-        else:
-            raise NotImplementedError('Need path for SplitConditions')
-        return root
 
     def set_data_path(self):
         '''Sets the path to the session data'''
