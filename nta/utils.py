@@ -266,10 +266,27 @@ def loop_cell_adjust_legend(flag, sp_idx, ax, **kwargs):
         ax.get_legend().remove()
 
 
-def loop_cell_create_axes(flag, figsize, ncols=3, nrows=1):
+def loop_cell_create_axes(flag, figsize, ncols=3, nrows=1, **kwargs):
     w, h = figsize
     ncols = ncols if flag else 1
-    fig, axs = plt.subplots(ncols=ncols, nrows=nrows, figsize=(w * ncols, h * nrows), layout='constrained')
+    fig, axs = plt.subplots(ncols=ncols, nrows=nrows,
+                            figsize=(w * ncols, h * nrows),
+                            layout='constrained', **kwargs)
     if not flag:
         axs = [axs]
+    return fig, axs
+
+
+def label_outer_axes(fig, axs, xlabel, ylabel):
+
+    if not isinstance(fig, plt.Figure):
+        fig = fig.fig
+    else:
+        [ax_.set(xlabel='', ylabel='') for ax_ in axs.flatten()]
+    fig.add_subplot(111, frameon=False)
+    plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
+                    left=False, right=False)
+    plt.ylabel(xlabel, labelpad=10)
+    plt.xlabel(ylabel)
+    plt.tight_layout()
     return fig, axs
