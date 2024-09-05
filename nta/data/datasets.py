@@ -162,12 +162,8 @@ class Dataset(ABC):
 
     def set_trials_path(self):
         '''Set path to trial-level data file.'''
-
         file_path = self.set_session_path()
-        if self.user != 'ally':
-            trials_path = file_path / f'{self.mouse_}_trials.csv'
-        else:
-            trials_path = file_path / 'photometry' / f'{self.mouse_}_trials.csv'
+        trials_path = file_path / f'{self.mouse_}_trials.csv'
         return trials_path
 
     def define_data_dtypes(self):
@@ -297,6 +293,7 @@ class Dataset(ABC):
         session_log_mouse = session_log.query(f'Mouse == "{self.mouse_}" \
                                               & Condition.isin({probs})')
         q = f'Mouse == "{self.mouse_}" & Condition.isin({probs}) \
+            & N_valid_trials > 100 \
             & Pass.isin({QC_pass})' + kwargs.get('query', '')
         session_log = session_log.query(q)
         if self.verbose:
