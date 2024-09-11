@@ -594,10 +594,10 @@ def match_state_left_right(df):
 
     # Update df_clean with correct state values.
     df_clean = df_.copy().dropna(subset=['selHigh', 'State', 'direction'])
+
     # Make sure we end up with the right mapping.
     # print('0: ', df_clean.query('State == 0 & direction == 0').Reward.mean())
     # print('1: ', df_clean.query('State == 1 & direction == 1').Reward.mean())
-
     assert df_clean.query('State == 0 & direction == 0').Reward.mean() >= 0.65, (
         f'{df.Session.iloc[0]} fails state mapping')
     assert df_clean.query('State == 1 & direction == 1').Reward.mean() >= 0.65, (

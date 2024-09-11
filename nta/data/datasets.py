@@ -257,7 +257,7 @@ class Dataset(ABC):
 
     def load_cohort_dict(self):
         '''Load lookup table for sensor expressed in each mouse of cohort.'''
-        cohort = load_config_variables(self.root, 'cohort')['cohort']
+        cohort = load_config_variables(self.config_path, 'cohort')['cohort']
         return cohort
 
     def sessions_to_load(self,
@@ -517,13 +517,19 @@ class Dataset(ABC):
                 Sampling frequency (in Hz) of the timeseries.
         '''
 
+        if np.any(self.ts.get('fs', False)):
+            # In case sampling rate was stored explicitly
+            assert self.ts['fs'].nunique() == 1, 'multiple sampling rates logged'
+            self.fs = self.ts['fs'].unique()[0]
+            self.tstep = 1 / self.fs
+            return None
+
         if timestamps is None:
             tstamps = self.ts.session_clock.copy()
         elif not isinstance(timestamps, pd.Series):
             tstamps = pd.Series(timestamps)
         else:
             tstamps = timestamps.copy()
-
         tsteps = (tstamps
                   .reset_index(drop=True)
                   .diff()
@@ -724,9 +730,8 @@ class DeterministicData(Dataset):
     def __init__(self,
                  mice: str | list[str],
                  **kwargs):
+
         super().__init__(mice, **kwargs)
-        self.dataset = 'ally'
-        # self.channels = self.set_channels()
 
     def set_session_path(self):
         '''Sets path to single session data'''
@@ -742,44 +747,44 @@ class DeterministicData(Dataset):
         channels = {'z_redL', 'z_redR'}
         return channels
 
-    def load_cohort_dict(self):
-        mice = self.mice if isinstance(self.mice, list) else [self.mice]
-        cohort = {mouse: 'rDA' for mouse in mice}
-        return cohort
+    # def load_cohort_dict(self):
+    #     mice = self.mice if isinstance(self.mice, list) else [self.mice]
+    #     cohort = {mouse: 'rDA' for mouse in mice}
+    #     return cohort
 
-    def set_trials_path(self):
+    # def set_trials_path(self):
 
-        file_path = self.set_session_path()
-        fname = f'{self.mouse_}_{self.session_}_behavior_df_full.csv'
-        trials_path = file_path / fname
-        return trials_path
+    #     file_path = self.set_session_path()
+    #     fname = f'{self.mouse_}_{self.session_}_behavior_df_full.csv'
+    #     trials_path = file_path / fname
+    #     return trials_path
 
-    def sessions_to_load(self,
-                         probs: int = 9010,
-                         QC_pass: bool = True):
+    # def sessions_to_load(self,
+    #                      probs: int = 9010,
+    #                      QC_pass: bool = True):
 
-        '''
-        Make list of sessions to include for designated mouse
+    #     '''
+    #     Make list of sessions to include for designated mouse
 
-        Args:
-            mouse (str):
-                Mouse ID.
-            probs (int):
-                Filter bandit data by probability conditions.
-            QC_pass (bool):
-                Whether to take sessions passing quality control (True) or
-                failing (False).
+    #     Args:
+    #         mouse (str):
+    #             Mouse ID.
+    #         probs (int):
+    #             Filter bandit data by probability conditions.
+    #         QC_pass (bool):
+    #             Whether to take sessions passing quality control (True) or
+    #             failing (False).
 
-        Returns:
-            dates_list (list):
-                List of dates to load in for mouse.
-        '''
-        session_log = pd.read_excel(self.summary_path, engine='openpyxl')
-        session_log = session_log.query('Mouse == @self.mouse_')
-        sessions = list(set(session_log.Date.values))
-        sessions = ['20'+'_'.join(a + b for a, b in zip(*[iter(str(s_))] * 2))
-                    for s_ in sessions]
-        return sessions
+    #     Returns:
+    #         dates_list (list):
+    #             List of dates to load in for mouse.
+    #     '''
+    #     session_log = pd.read_excel(self.summary_path, engine='openpyxl')
+    #     session_log = session_log.query('Mouse == @self.mouse_')
+    #     sessions = list(set(session_log.Date.values))
+    #     sessions = ['20'+'_'.join(a + b for a, b in zip(*[iter(str(s_))] * 2))
+    #                 for s_ in sessions]
+    #     return sessions
 
     def custom_update_columns(self, trials, ts):
 
