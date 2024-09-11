@@ -149,7 +149,8 @@ def QC_session_performance(trials: pd.DataFrame,
                              '9010': 0.7,
                              8020: 0.6,
                              '8020': 0.6,
-                             '100-1': 0.7}
+                             '100-1': 0.7,
+                             '100-0': 0.6}
     TARGET_AVG = condition_perf_thresh.get(trials.Condition.unique()[0])
     SIDE_BIAS = 0.1
     SPOUT_BIAS = 0.15
