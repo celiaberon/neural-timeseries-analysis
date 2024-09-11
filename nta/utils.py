@@ -143,7 +143,7 @@ def write_metadata_lineplots(*args, **kwargs):
                                .nunique(), dtype='str')
 
     metadata = [f'filename = {fname}',
-                f'supblot = {kwargs.get("y_col").split("_")[0]}',
+                f'subplot = {kwargs.get("y_col").split("_")[0]}',
                 f'channel = {"_".join(kwargs.get("y_col").split("_")[1:])}',
                 f'n_trials = {exploded_trials.nTrial.nunique()}',
                 f'n_sessions = {exploded_trials.Session.nunique()}',
