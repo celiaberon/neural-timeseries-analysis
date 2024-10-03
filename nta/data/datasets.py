@@ -423,7 +423,6 @@ class Dataset(ABC):
 
             ts, trials = self.load_session_data()
             if ts is None: continue
-
             trials, ts = self.custom_update_columns(trials, ts)
             trials, ts = self.update_columns(trials, ts)
 
