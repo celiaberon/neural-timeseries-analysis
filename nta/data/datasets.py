@@ -305,7 +305,7 @@ class Dataset(ABC):
                                               & Condition.isin({probs})')
         q = f'Mouse == "{self.mouse_}" & Condition.isin({probs}) \
             & N_valid_trials > {kwargs.get("min_num_trials", 100)} \
-            & Pass.isin({QC_pass})' + kwargs.get('query', '')
+            & Pass.isin({QC_pass})' + kwargs.get("query", '')
         session_log = session_log.query(q)
         if self.verbose:
             print(f'{self.mouse_}: {len(session_log)} of',
@@ -488,7 +488,6 @@ class Dataset(ABC):
         # If no photometry channels passed QC, move on to next session.
         sensors = self.get_sensors()
         if self.qc_photo:
-            print([(ch, sensors.get(ch)) for ch in self.channels])
             sig_cols = {ch for ch in self.channels
                         if not qc.is_normal(ts.get(ch, None),
                                             sensor=sensors.get(ch),

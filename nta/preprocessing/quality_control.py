@@ -365,8 +365,8 @@ def is_normal(ts, include_score=False, verbose=False, thresh_score=0,
     skew_thresh, kurt_thresh = thresholds.get(sensor)
 
     # Should be a bit skewed (although for DA not necessarily a lot).
-    skew = np.abs(ts.skew()) < skew_thresh  # True when fails
-    kurtosis = np.abs(ts.kurtosis()) < kurt_thresh  # True when fails
+    skew = np.abs(ts.skew()) < skew_thresh  # True when normal (fails)
+    kurtosis = np.abs(ts.kurtosis()) < kurt_thresh  # True when normal (fails)
 
     rand_normal = np.random.normal(0, np.nanstd(ts), len(ts))
     _, p_value = scipy.stats.ks_2samp(ts, rand_normal, alternative="two-sided")
