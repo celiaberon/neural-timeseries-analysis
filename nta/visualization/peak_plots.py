@@ -6,6 +6,8 @@ Created on Fri Aug 12 13:30:18 2022
 @author: celiaberon
 """
 
+from math import modf
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -122,6 +124,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
     # If x-axis variable and hue are different, recolor plot for x-variable
     # and use hatching for hue variable.
     if (x_col != plot_func_kws.get('hue', x_col)) & (plot_func == sns.barplot):
+        assert plot_func_kws.get('hue_order') == [0, 1], 'order will not match labels'
         ax = hatch_and_recolor(ax, peaks, x_col, **kwargs)
 
     if kwargs.get('save'):
@@ -209,12 +212,13 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
         return (i % nbars) - (nbars // 2) + (i % nbars >= (nbars // 2))
 
     cpal = set_color_palette(peaks, x_col, palette=peaks[x_col].nunique())
-
     nbars = len(cpal)
     for label, ax_ in axs.items():
-        for i, bar in enumerate(ax_.patches):
-            bar.set_hatch(hatch_styles[i // nbars])
-            bar.set_facecolor(cpal[cpal_key(i, nbars)])
+
+        for bar in ax_.patches[:-2]:
+            rem, j = np.round(modf(bar._x0), decimals=1)
+            bar.set_hatch(hatch_styles[1-int(np.ceil(rem))])  # because of hue_order
+            bar.set_facecolor(cpal[cpal_key(int(j), nbars)])
             bar.set_alpha(0.8)
             bar.set_edgecolor('k')
 
@@ -226,34 +230,6 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
     ax_.legend(handles=legend_elements, bbox_to_anchor=(1, 1))
 
     return axs
-
-
-# def plot_and_recolor(plot_func,
-#                      data,
-#                      ax,
-#                      color_palette,
-#                      y_col: str = '',
-#                      cols: tuple[str, str] = None,
-#                      **kwargs):
-
-#     hatch_styles = {0: '', 1: '//', 2: '+', 3: '*'}
-
-#     col1, col2 = cols
-#     # order = list(color_palette)
-#     order = [val for val in color_palette if val in data[col1].unique()]
-
-#     hue_factor = data[col2].dropna().nunique()
-
-#     # reduce order to only those needed
-#     plot_func(data=data, x=col1, hue=col2, y=y_col, ax=ax, showfliers=False,
-#               order=order)
-
-#     for i, box in enumerate(ax.artists):
-#         key = order[i // hue_factor]
-#         box.set_facecolor(color_palette[key])
-#         box.set_hatch(hatch_styles[i % hue_factor])
-
-#     return ax
 
 
 def set_color_palette(peaks, x_col, palette=None, hue=None, **kwargs):
