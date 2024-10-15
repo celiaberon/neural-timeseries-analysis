@@ -349,13 +349,17 @@ def is_normal(ts, include_score=False, verbose=False, thresh_score=0,
             to 3).
     '''
 
-    if ts is None:  # needs to be a distribution to have signal
+    if (ts is None) or (sensor in [None, '', 'mcherry', 'ach3']):
+        # Needs to be a distribution to have signal
         return True
 
     thresholds = {'grabda_vls': (0.5, 0.8),
                   'grabda_dms': (0.1, 0.2),
                   'grabda_kev': (0.1, 0.2),
-                  'rDA': (0.5, 0.8)}
+                  'rDAh': (0.5, 0.8),  # placeholder
+                  'dlight_vls': (0.5, 0.8),  # placeholder
+                  'dlight_snc': (0.5, 0.8),  # placeholder
+                  'ach3': (0.5, 0.8)}  # placeholder
 
     skew_thresh, kurt_thresh = thresholds.get(sensor)
 
@@ -378,6 +382,7 @@ def is_normal(ts, include_score=False, verbose=False, thresh_score=0,
     result = score > thresh_score
 
     if verbose:
+        print(sensor, result, ts._name)
         print(f'skew = {np.abs(ts.skew())}\n',
               f'kurtosis = {np.abs(ts.kurtosis())}\n',
               f'p_value = {p_value}\n',
