@@ -187,6 +187,7 @@ def QC_session_performance(trials: pd.DataFrame,
         enlp_rate = np.mean(trials['n_ENL'] > 1)
         qc_summary = pd.DataFrame({'Mouse': get_sess_val(trials, 'Mouse'),
                                    'Date': get_sess_val(trials, 'Date'),
+                                   'Condition': get_sess_val(trials, 'Condition'),
                                    'Session': get_sess_val(trials, 'Session'),
                                    'Pright': round(right_avg, 2),
                                    'Phigh': round(target_avg, 2),
@@ -197,7 +198,7 @@ def QC_session_performance(trials: pd.DataFrame,
                                    'Preward': round(trials.Reward.mean(), 2)},
                                   index=[0])
     if kwargs.get('fname_suffix') == 'Kevin':
-        for col in ['Condition', 'age_at_session', 'Age_Group', 'retrained']:
+        for col in ['age_at_session', 'Age_Group', 'retrained']:
             qc_summary[col] = get_sess_val(trials, col)
 
     save_session_log(qc_summary, **kwargs)
