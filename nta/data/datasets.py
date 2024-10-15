@@ -289,7 +289,10 @@ class Dataset(ABC):
                 latest.
         '''
 
+        # Read in session log.
         session_log = pd.read_csv(self.summary_path)
+
+        # Format inputs/args correctly.
         if not isinstance(QC_pass, list):
             QC_pass = [QC_pass]
         if isinstance(probs, list):
@@ -301,7 +304,7 @@ class Dataset(ABC):
         session_log_mouse = session_log.query(f'Mouse == "{self.mouse_}" \
                                               & Condition.isin({probs})')
         q = f'Mouse == "{self.mouse_}" & Condition.isin({probs}) \
-            & N_valid_trials > 100 \
+            & N_valid_trials > {kwargs.get("min_num_trials", 100)} \
             & Pass.isin({QC_pass})' + kwargs.get('query', '')
         session_log = session_log.query(q)
         if self.verbose:
