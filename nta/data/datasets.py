@@ -222,7 +222,7 @@ class Dataset(ABC):
 
         trial_dtypes, ts_dtypes = self.define_data_dtypes()
 
-        usecols = list(trial_dtypes.keys())
+        usecols = list(trial_dtypes.keys()) + list(self.trls_add_cols)
         trials = pd.read_csv(trials_path, index_col=None, dtype=trial_dtypes,
                              usecols=usecols)
 
@@ -258,7 +258,15 @@ class Dataset(ABC):
     def load_cohort_dict(self):
         '''Load lookup table for sensor expressed in each mouse of cohort.'''
         cohort = load_config_variables(self.config_path, 'cohort')['cohort']
+        cohort = {k: cohort.get(k) for k in self.mice}
         return cohort
+
+    def get_sensors(self, prefix='z_'):
+
+        channels = ['grnL', 'redL', 'grnR', 'redR']
+        sensors = {f'{prefix}{k}': v
+                   for k, v in zip(channels, self.cohort.get(self.mouse_))}
+        return sensors
 
     def sessions_to_load(self,
                          probs: int | str = 9010,
@@ -475,11 +483,12 @@ class Dataset(ABC):
         '''
 
         # If no photometry channels passed QC, move on to next session.
-        sensor = self.cohort.get(self.mouse_)
+        sensors = self.get_sensors()
         if self.qc_photo:
+            print([(ch, sensors.get(ch)) for ch in self.channels])
             sig_cols = {ch for ch in self.channels
                         if not qc.is_normal(ts.get(ch, None),
-                                            sensor=sensor,
+                                            sensor=sensors.get(ch),
                                             verbose=self.verbose)}
         else:
             sig_cols = {ch for ch in self.channels if ch in ts.columns}
