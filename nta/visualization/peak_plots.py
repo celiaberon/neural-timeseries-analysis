@@ -206,7 +206,7 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
 
     import matplotlib.patches as mpatches
 
-    hatch_styles = {0: '', 1: '//', 2: '+', 3: '*'}
+    hatch_styles = {0: '', 1: '//'}
 
     def cpal_key(i, nbars):
         return (i % nbars) - (nbars // 2) + (i % nbars >= (nbars // 2))
@@ -216,8 +216,13 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
     for label, ax_ in axs.items():
 
         for bar in ax_.patches[:-2]:
-            rem, j = np.round(modf(bar._x0), decimals=1)
-            bar.set_hatch(hatch_styles[1-int(np.ceil(rem))])  # because of hue_order
+
+            rem, j = np.round(modf(bar._x0 - 0.1), decimals=1)
+
+            if rem < 0:
+                rem = 1 + rem
+
+            bar.set_hatch(hatch_styles[rem > 0.5])  # because of hue_order
             bar.set_facecolor(cpal[cpal_key(int(j), nbars)])
             bar.set_alpha(0.8)
             bar.set_edgecolor('k')
