@@ -125,7 +125,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
     # and use hatching for hue variable.
     if (x_col != plot_func_kws.get('hue', x_col)) & (plot_func == sns.barplot):
         assert plot_func_kws.get('hue_order') == [0, 1], 'order will not match labels'
-        ax = hatch_and_recolor(ax, peaks, x_col, **kwargs)
+        ax = hatch_and_recolor(ax, peaks, x_col, cpal=plot_func_kws['palette'], **kwargs)
 
     if kwargs.get('save'):
         fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
@@ -200,7 +200,7 @@ def initialize_peak_fig(states,
 
 
 def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
-                      hatch_colors={0: 'white', 1: 'white'}, **kwargs):
+                      hatch_colors={0: 'white', 1: 'white'}, cpal=None, **kwargs):
 
     '''Recolor plot for x-variable and use hatching for hue variable.'''
 
@@ -209,23 +209,24 @@ def hatch_and_recolor(axs, peaks, x_col, hatch_labels={0: 'Stay', 1: 'Switch'},
     hatch_styles = {0: '', 1: '//'}
 
     def cpal_key(i, nbars):
-        return (i % nbars) - (nbars // 2) + (i % nbars >= (nbars // 2))
+        val = (i % nbars) - (nbars // 2) + (i % nbars >= np.ceil(nbars / 2))
+        return val
 
-    cpal = set_color_palette(peaks, x_col, palette=peaks[x_col].nunique())
+    if cpal is None:
+        cpal = set_color_palette(peaks, x_col, palette=peaks[x_col].nunique())
     nbars = len(cpal)
     for label, ax_ in axs.items():
-
         for bar in ax_.patches[:-2]:
 
             rem, j = np.round(modf(bar._x0 - 0.1), decimals=1)
-
             if rem < 0:
+                j -= 1
                 rem = 1 + rem
-
             bar.set_hatch(hatch_styles[rem > 0.5])  # because of hue_order
-            bar.set_facecolor(cpal[cpal_key(int(j), nbars)])
+            bar.set_facecolor(cpal[cpal_key(int(j+1), nbars)])
             bar.set_alpha(0.8)
             bar.set_edgecolor('k')
+
 
     legend_elements = [mpatches.Patch(facecolor=hatch_colors.get(k),
                                       edgecolor='k',
@@ -252,18 +253,17 @@ def set_color_palette(peaks, x_col, palette=None, hue=None, **kwargs):
     labels = np.sort(peaks[hue_col].dropna().unique())
     match palette:
         case dict():
-            labels = palette.keys()
+            return palette
+            # labels = palette.keys()
         case str():
-            palette = sns.color_palette(palette, n_colors=len(labels))
+            return sns.color_palette(palette, n_colors=len(labels))
         case None:
-            palette = None
+            return None
         case list():
-            palette = dict(zip(labels, palette))
-        case _:
+            return dict(zip(labels, palette))
+        case int():
             palette = sns.color_palette('RdBu', n_colors=len(labels))
-            palette = dict(zip(labels, palette))
-
-    return palette
+            return dict(zip(labels, palette))
 
 
 def exclude_outliers(peaks: pd.DataFrame,
