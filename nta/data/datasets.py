@@ -142,6 +142,11 @@ class Dataset(ABC):
         if 'trial_clock' not in ts.columns:
             ts['trial_clock'] = 1 / ts['fs']
             ts['trial_clock'] = ts.groupby('nTrial', observed=True)['trial_clock'].cumsum()
+        else:
+            assert ts['fs'].iloc[0] is not None, 'need sampling freq to add trial clock'
+            ts['trial_clock'] = ts.groupby('nTrial').cumcount() * 1/ts['fs'].iloc[0]
+
+        assert sum(ts['trial_clock'].diff() < 0) == (ts.nTrial.nunique() - 1), 'trial_clock is incorrect'
 
         return trials, ts
 
@@ -178,7 +183,7 @@ class Dataset(ABC):
             'direction': np.float32,
             'Reward': np.float32,
             'T_ENL': np.int16,
-            'n_ENL': np.int8,
+            'n_ENL': np.int16,
             'n_Cue': np.int8,
             'State': np.float32,
             'selHigh': np.float32,
@@ -496,6 +501,7 @@ class Dataset(ABC):
             sig_cols = {ch for ch in self.channels if ch in ts.columns}
 
         self.sig_channels = self.sig_channels.union(sig_cols)
+        list(self.sig_channels).sort()
         if not sig_cols:
             if self.verbose:
                 print(f'no sig: {self.mouse_} {self.session_}')
@@ -733,74 +739,6 @@ class ProbHFPhotometryTails(ProbHFPhotometry):
         gc.collect()
 
         return multi_sessions
-
-
-class DeterministicData(Dataset):
-
-    def __init__(self,
-                 mice: str | list[str],
-                 **kwargs):
-
-        super().__init__(mice, **kwargs)
-
-    def set_session_path(self):
-        '''Sets path to single session data'''
-        return self.data_path / self.mouse_ / self.session_ / 'photometry'
-
-    def set_save_path(self):
-        save_path = self.root / 'figures' / self.label
-        if not os.path.exists(os.path.join(save_path, 'metadata')):
-            os.makedirs(os.path.join(save_path, 'metadata'))
-        return save_path
-
-    def set_channels(self):
-        channels = {'z_redL', 'z_redR'}
-        return channels
-
-    # def load_cohort_dict(self):
-    #     mice = self.mice if isinstance(self.mice, list) else [self.mice]
-    #     cohort = {mouse: 'rDA' for mouse in mice}
-    #     return cohort
-
-    # def set_trials_path(self):
-
-    #     file_path = self.set_session_path()
-    #     fname = f'{self.mouse_}_{self.session_}_behavior_df_full.csv'
-    #     trials_path = file_path / fname
-    #     return trials_path
-
-    # def sessions_to_load(self,
-    #                      probs: int = 9010,
-    #                      QC_pass: bool = True):
-
-    #     '''
-    #     Make list of sessions to include for designated mouse
-
-    #     Args:
-    #         mouse (str):
-    #             Mouse ID.
-    #         probs (int):
-    #             Filter bandit data by probability conditions.
-    #         QC_pass (bool):
-    #             Whether to take sessions passing quality control (True) or
-    #             failing (False).
-
-    #     Returns:
-    #         dates_list (list):
-    #             List of dates to load in for mouse.
-    #     '''
-    #     session_log = pd.read_excel(self.summary_path, engine='openpyxl')
-    #     session_log = session_log.query('Mouse == @self.mouse_')
-    #     sessions = list(set(session_log.Date.values))
-    #     sessions = ['20'+'_'.join(a + b for a, b in zip(*[iter(str(s_))] * 2))
-    #                 for s_ in sessions]
-    #     return sessions
-
-    def custom_update_columns(self, trials, ts):
-
-        trials = trials.rename(columns={'Direction': 'direction'})
-        trials = bf.flag_blocks_for_timeouts(trials)
-        return trials, ts
 
 
 class SplitConditions(Dataset):
