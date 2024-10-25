@@ -113,6 +113,9 @@ def get_sampling_freq(timestamps):
         fs:
             Sampling frequency (in Hz) of the timeseries.
     '''
+
+    print('this version of get_sampling_freq() is not up to date, please provide explicitly')
+
     if not isinstance(timestamps, pd.Series):
         tstamps = pd.Series(timestamps)
     else:
