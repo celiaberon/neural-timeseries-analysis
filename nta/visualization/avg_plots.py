@@ -451,7 +451,7 @@ def label_legend_unique_handles(ax, **kwargs):
 
 def convert_leg_to_cbar(fig, ax, labels=None, cpal=None,
                         discrete_cpal: bool = False,
-                        anchor=(1.3, 0),
+                        anchor=(1.3, 0), shrink=0.6,
                         **kwargs):
 
     '''
@@ -500,7 +500,7 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None,
     ax = fig.add_subplot(111, frameon=False)
     plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
                     left=False, right=False)
-    cbar = plt.colorbar(sm, anchor=anchor, shrink=0.6, ax=ax)
+    cbar = plt.colorbar(sm, anchor=anchor, shrink=shrink, ax=ax, **kwargs)
     cbar.ax.tick_params(size=0)
     if len(labels) <= 7:
         cbar.set_ticks(np.arange(cm_min + 0.5, cm_max - 0.5),
