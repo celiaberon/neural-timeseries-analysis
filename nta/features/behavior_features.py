@@ -606,9 +606,10 @@ def match_state_left_right(df):
     select_state = df_clean['State'] == df_clean['direction']
     mismatch = np.where(df_clean.selHigh != (select_state))
 
-    # Permissable error level per session, but will convert to NaNs.
-    assert len(mismatch[0]) <= 3
-    if mismatch[0]:
+    # Permissable error level per session, but will convert to NaNs. They tend
+    # to be a result of double lick detection.
+    assert len(mismatch[0]) <= 7
+    if any(mismatch[0]):
         mismatch_idx = df_clean.iloc[mismatch].index.values
         df_.loc[mismatch_idx, 'selHigh'] = np.nan
 
@@ -650,7 +651,7 @@ def add_behavior_cols(trials: pd.DataFrame,
     if isinstance(timeseries, pd.DataFrame):
         ts_ = timeseries.copy()
         if 'Mouse' not in ts_.columns:
-            ts_['Mouse'] = [sess[:3] for sess in ts_['Session'].values]
+            ts_['Mouse'] = [sess.split('_')[0] for sess in ts_['Session'].values]
 
     assert trials_.Session.dropna().nunique() == 1  # because of row shifting
 
