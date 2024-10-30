@@ -427,7 +427,7 @@ def config_plot(ax,
         # Replace legend with colorbar if conditioning on numeric variable
         # that contains more than two conditions.
         if is_numeric_dtype(ts[column]) & (ts[column].dropna().nunique() > 3):
-            fig, ax = convert_leg_to_cbar(fig, ax, **kwargs)
+            fig, ax = convert_leg_to_cbar(fig, ax, cpal=kwargs.get('cpal'))
         else:
             handles, labels = ax.get_legend_handles_labels()
             ax.legend().set_visible(False)
@@ -451,8 +451,7 @@ def label_legend_unique_handles(ax, **kwargs):
 
 def convert_leg_to_cbar(fig, ax, labels=None, cpal=None,
                         discrete_cpal: bool = False,
-                        anchor=(1.3, 0), shrink=0.6,
-                        **kwargs):
+                        anchor=(1.3, 0), shrink=0.6):
 
     '''
     Create colorbar to replace legend. Should be called for sequential,
@@ -500,7 +499,7 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None,
     ax = fig.add_subplot(111, frameon=False)
     plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
                     left=False, right=False)
-    cbar = plt.colorbar(sm, anchor=anchor, shrink=shrink, ax=ax, **kwargs)
+    cbar = plt.colorbar(sm, anchor=anchor, shrink=shrink, ax=ax)
     cbar.ax.tick_params(size=0)
     if len(labels) <= 7:
         cbar.set_ticks(np.arange(cm_min + 0.5, cm_max - 0.5),
