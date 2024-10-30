@@ -5,6 +5,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pdfkit
 import seaborn as sns
 from IPython.core.magic import register_cell_magic
 
@@ -259,8 +260,8 @@ def cast_object_to_category(df):
     return df
 
 
-def loop_cell_adjust_legend(flag, sp_idx, ax, **kwargs):
-    if (sp_idx == 2) or (not flag):
+def loop_cell_adjust_legend(flag, sp_idx, ax, n_groups, **kwargs):
+    if (sp_idx == (n_groups - 1)) or (not flag):
         ax.get_legend().set(**kwargs)
     else:
         ax.get_legend().remove()
@@ -290,3 +291,17 @@ def label_outer_axes(fig, axs, xlabel, ylabel):
     plt.xlabel(ylabel)
     plt.tight_layout()
     return fig, axs
+
+
+def html_to_pageless_pdf(input_html, output_pdf):
+    options = {
+        'page-size': 'A1',                  # Larger page size for continuous flow
+        'disable-smart-shrinking': '',      # Avoids shrinking content, useful for continuous layouts
+        'no-outline': None,                 # Prevents automatic outlines that may add spaces
+        'zoom': '1.8',                     # Adjust zoom to ensure images scale without large spaces
+        'margin-top': '0',
+        'margin-bottom': '0',
+        'viewport-size': '1280x1024',       # Sets viewport for better handling of embedded images
+
+    }
+    pdfkit.from_file(input_html, output_pdf, options=options)
