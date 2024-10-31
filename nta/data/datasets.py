@@ -68,6 +68,9 @@ class Dataset(ABC):
 
         self.trials = bf.order_sessions(self.trials)
 
+        self.sig_channels = list(self.sig_channels) if isinstance(self.sig_channels, set) else []
+        self.sig_channels.sort()
+
         # Some validation steps on loaded data.
         self.get_sampling_freq()
         self.check_event_order()
@@ -232,7 +235,7 @@ class Dataset(ABC):
                              usecols=usecols)
 
         usecols = list(ts_dtypes.keys())
-        usecols.extend(['z_grnL', 'z_grnR'] + list(self.ts_add_cols))
+        usecols.extend(list(self.channels) + list(self.ts_add_cols))
         usecols = list(set(usecols))
 
         # Load timeseries data but be forgiving about missing columns.
@@ -501,7 +504,7 @@ class Dataset(ABC):
             sig_cols = {ch for ch in self.channels if ch in ts.columns}
 
         self.sig_channels = self.sig_channels.union(sig_cols)
-        list(self.sig_channels).sort()
+
         if not sig_cols:
             if self.verbose:
                 print(f'no sig: {self.mouse_} {self.session_}')
