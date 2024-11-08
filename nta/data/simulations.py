@@ -18,6 +18,8 @@ class HeadfixedTask:
         self.nTrial = 0
         self.state = np.random.choice([0, 1])  # initial high spout
         self.timestep = 1/50  # in seconds
+        self.ts = pd.DataFrame()
+        self.trials = pd.DataFrame()
 
     def make_trial(self):
 
@@ -29,7 +31,9 @@ class HeadfixedTask:
         tstep = self.timestep  # sec = index_units * tstep
 
         # Draw current ENL duration as index for 50 Hz samples.
+        penalty = np.random.choice([0, 1], p=[0.8, 0.2])
         enl = int(npr.choice(self.enl_dist) // tstep)
+        penalty_idx = int(np.random.random() * enl) if penalty else 0
         cue_dur = self.cue_duration / tstep
 
         # Draw current selection time as index for 50 Hz samples.
@@ -43,7 +47,8 @@ class HeadfixedTask:
         cons_lick = sel_time + int(second_lick_delay)
 
         # Number of samples comprising the full trial as a timeseries.
-        n_samples = int(sum((enl,
+        n_samples = int(sum((penalty_idx,
+                             enl,
                              cue_dur,
                              sel_time,
                              (self.consumption_period / tstep))))
@@ -53,7 +58,9 @@ class HeadfixedTask:
         curr_trial_ts = {state: np.zeros(n_samples) for state in states}
         curr_trial_ts = pd.DataFrame(curr_trial_ts)
         curr_trial_ts['step'] = tstep
-        curr_trial_ts.loc[enl, 'Cue'] = 1
+        curr_trial_ts.loc[enl + penalty_idx, 'Cue'] = 1
+        if penalty:
+            curr_trial_ts.loc[penalty_idx, 'ENLP'] = 1
 
         # Trial can only contain selection and consumption events if selection
         # occurs before max selection time.
@@ -70,7 +77,8 @@ class HeadfixedTask:
                          't_cue_to_cons': (cons_lick + cue_dur) * tstep,
                          't_sel_pre_cons': -second_lick_delay * tstep,
                          't_cue_pre_cons': -(cons_lick + cue_dur) * tstep,
-                         't_cue_pre_sel': -(sel_time + cue_dur) * tstep}
+                         't_cue_pre_sel': -(sel_time + cue_dur) * tstep,
+                         'enlp_trial': penalty}
         current_trial = pd.DataFrame(current_trial, index=[0])
 
         self.nTrial += 1
@@ -92,19 +100,21 @@ class HeadfixedTask:
         if self.nTrial % 20 == 0:
             self.state = 1 - self.state
 
-    def add_pseudo_columns(self):
+    def add_pseudo_columns(self, session_id):
 
         '''
         Add columns that plotting functions will expect (no current bearing
         on simulated tests.
         '''
 
-        self.session['session'] = 'sim_session'
-        self.session['iSpout'] = self.session['Select'].copy()
-        self.session['iSpout'] *= (self.session.nTrial // 20) % 2
-        self.trials['Session'] = 'sim_session'
+        session = f'sim_session_{session_id}'
+        self.ts_['Session'] = session
+        self.trials_['Session'] = session
+        self.ts_['iSpout'] = self.ts_['Select'].copy()
+        self.ts_['iSpout'] *= (self.ts_.nTrial // 20) % 2
+        # self.trials['Session'] = 'sim_session'
 
-    def generate_session(self, total_trials=300):
+    def generate_session(self, total_trials=300, session_id=0):
 
         '''
         Generate a session of multiple trials with both timeseries- and trial-
@@ -113,8 +123,7 @@ class HeadfixedTask:
 
         session_trials = []
         session_timeseries = []
-        while self.nTrial < total_trials:
-
+        for trial in range(total_trials):
             timeseries, trials = self.make_trial()
             timeseries['trial_clock'] = self.timestep
             timeseries['trial_clock'] = timeseries['trial_clock'].cumsum()
@@ -125,9 +134,17 @@ class HeadfixedTask:
                               .reset_index(drop=True))
         session_timeseries['session_clock'] = session_timeseries.step.cumsum()
 
-        self.session = session_timeseries
-        self.trials = pd.concat(session_trials).reset_index(drop=True)
-        self.add_pseudo_columns()
+        self.ts_ = session_timeseries
+        self.trials_ = pd.concat(session_trials).reset_index(drop=True)
+        self.add_pseudo_columns(session_id=session_id)
+
+    def generate_multi_sessions(self, n_sessions, trials_per_session=300):
+
+        for session in range(n_sessions):
+            self.generate_session(total_trials=trials_per_session,
+                                  session_id=session)
+            self.ts = pd.concat((self.ts, self.ts_)).reset_index(drop=True)
+            self.trials = pd.concat((self.trials, self.trials_)).reset_index(drop=True)
 
     def generate_noisy_events(self, mean_amp=1.5, noise=True):
 
@@ -138,23 +155,23 @@ class HeadfixedTask:
 
         for state in ['Cue', 'Consumption']:
             if noise:
-                n_events = int(self.session[state].sum())
+                n_events = int(self.ts[state].sum())
                 event_amps = npr.normal(mean_amp,
                                         scale=1,
                                         size=n_events)
             else:
-                event_amps = np.ones(int(self.session[state].sum()))
+                event_amps = np.ones(int(self.ts[state].sum()))
             event_amps = np.clip(event_amps, 0, np.inf)
 
             if state == 'Consumption':
                 event_amps *= self.trials.Reward.values
 
             col = f'{state}_events'
-            self.session[col] = self.session[state].copy()
-            self.session.loc[self.session[state] == 1, col] *= event_amps
+            self.ts[col] = self.ts[state].copy()
+            self.ts.loc[self.ts[state] == 1, col] *= event_amps
 
-        amps = self.session['Cue_events'] + self.session['Consumption_events']
-        self.session['amplitudes'] = amps
+        amps = self.ts['Cue_events'] + self.ts['Consumption_events']
+        self.ts['amplitudes'] = amps
 
     def add_gaussian_noise(self, noise=True):
 
@@ -162,8 +179,8 @@ class HeadfixedTask:
             return None
         baseline_noise = npr.normal(0,
                                     scale=0.1,
-                                    size=len(self.session))
-        self.session['amplitudes'] += baseline_noise
+                                    size=len(self.ts))
+        self.ts['amplitudes'] += baseline_noise
 
     def convolve_kernel(self, **kwargs):
 
@@ -185,15 +202,15 @@ class HeadfixedTask:
         gauss_filter = signal.windows.gaussian(M=10, std=0.43)
         gauss_filter = np.clip(gauss_filter, 0, np.inf)
         self.gauss_filter = gauss_filter
-        convolved_sig = signal.convolve(self.session.amplitudes.values,
+        convolved_sig = signal.convolve(self.ts.amplitudes.values,
                                         gauss_filter)
-        self.session['amplitudes_gauss'] = convolved_sig[:len(self.session)]
+        self.ts['amplitudes_gauss'] = convolved_sig[:len(self.ts)]
 
         exp_filter = signal.windows.exponential(140, 0, tau=20, sym=False)
         self.exp_filter = exp_filter
-        convolved_sig = signal.convolve(self.session.amplitudes_gauss.values,
+        convolved_sig = signal.convolve(self.ts.amplitudes_gauss.values,
                                         exp_filter)
-        self.session['grnL'] = convolved_sig[:len(self.session)]
+        self.ts['grnL'] = convolved_sig[:len(self.ts)]
 
     def plot_event_to_kernel(self):
 
