@@ -155,7 +155,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
                               channel: str | list[str] = None,
                               aligned_event: str = None,
                               window: tuple[int | float, int | float] = (1, 3),
-                              fs: int = None,
+                              fs: int | float = None,
                               quantify_peaks: bool = True,
                               ignore_precautions: bool = False,
                               **kwargs
@@ -200,7 +200,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
             assert ts_full.nTrial.diff().max() == 1, (
                 'Found discontinuous trial IDs, cannot extract traces'
             )
-        assert ~any(ts_full.get('continuity_broken', [0])), (
+        assert not any(ts_full.get('continuity_broken', [0])), (
             'Continuity broken flag exists')
     else:
         print('Warning: not checking for trial continuity')
@@ -217,7 +217,7 @@ def align_photometry_to_event(trials: pd.DataFrame,
         _, fs = get_sampling_freq(ts_full.session_clock)
         print(f' no sampling frequency provided, using {round(fs, 2)} Hz')
     else:
-        print(f'using provided sampling frequency {fs} Hz')
+        print(f'using provided sampling frequency {round(fs, 2)} Hz')
     window_interp, timesteps = interpolate_window(window, fs)
 
     times_col = f'{aligned_event}_times'  # channel independent
