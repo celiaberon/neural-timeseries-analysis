@@ -305,3 +305,25 @@ def html_to_pageless_pdf(input_html, output_pdf):
 
     }
     pdfkit.from_file(input_html, output_pdf, options=options)
+
+
+def set_notebook_params(grp_key, notebook_id, root='.'):
+
+    config_file = configparser.ConfigParser()
+    config_file.read(os.path.join(root, 'prep_data_params.ini'))
+
+    # Create dictionary with key:value for each config item
+    data_loading_params = {}
+    for key in config_file['data_loading']:
+        data_loading_params[key] = eval(config_file['data_loading'][key])
+
+    # Create dictionary with key:value for each config item
+    data_cleaning_params = {}
+    for key in config_file['data_cleaning']:
+        data_cleaning_params[key] = eval(config_file['data_cleaning'][key])
+
+    config_file.read('../mouse_cohorts.ini')
+    data_loading_params['mice'] = eval(config_file['cohorts'].get(grp_key.lower()))
+    data_loading_params['label'] = f'{grp_key}/{notebook_id}'
+
+    return data_loading_params, data_cleaning_params
