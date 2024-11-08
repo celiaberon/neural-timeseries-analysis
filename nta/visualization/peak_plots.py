@@ -128,7 +128,10 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
         ax = hatch_and_recolor(ax, peaks, x_col, cpal=plot_func_kws['palette'], **kwargs)
 
     if kwargs.get('save'):
-        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
+        if not isinstance(fig, plt.Figure):
+            print('skipping save, not main figure')
+        else:
+            fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
 
     return fig, ax
 
@@ -193,7 +196,7 @@ def initialize_peak_fig(states,
         case dict():
             [ax[key].set(ylim=val) for key, val in axes_style.items()]
         case _:
-            print('defaulting to autofit axis limits')
+            pass
     sns.despine()
 
     return fig, ax
@@ -318,3 +321,27 @@ def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
         [ax_.legend().remove() for _, ax_ in ax.items()]
 
     return ax
+
+
+def plot_correlation(r, col0, col1, ax=None, hue=None, palette=None, legend=True, **kwargs):
+    if ax is None:
+        fig, ax = plt.subplots()
+    sns.barplot(data=r, x='channel', y='r', hue=hue, palette=palette, ax=ax, legend=legend)
+    ax.axhline(y=0, color='k')
+    ax.set(ylim=(-1, 1), title=f'correlation {col0}\nvs. {col1}', xlabel='hemisphere')
+    plt.legend(bbox_to_anchor=(1.8, 1))
+    sns.despine()
+
+
+def calc_grouped_corr(trials, col0, col1, grouping_variable):
+    rs = {}
+    for i, val in enumerate(trials[grouping_variable].dropna().unique()):
+        rs[i] = {
+            'r': (trials
+                  .groupby(grouping_variable)[[col0, col1]]
+                  .corr()
+                  .reset_index()
+                  .query(f'level_1 == @col1 & {grouping_variable} == @val')[col0].item()),
+            grouping_variable: val
+        }
+    return pd.DataFrame(rs).T
