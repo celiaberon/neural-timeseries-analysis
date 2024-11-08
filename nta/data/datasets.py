@@ -10,8 +10,10 @@ import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
 
+from ..events import align
 from ..features import behavior_features as bf
 from ..features.design_mat import make_design_mat
+from ..features.select_trials import clean_data
 from ..preprocessing import quality_control as qc
 from ..utils import (cast_object_to_category, downcast_all_numeric,
                      load_config_variables)
@@ -38,6 +40,7 @@ class Dataset(ABC):
         self.ts_add_cols = add_cols.get('ts', set())
         self.trls_add_cols = add_cols.get('trials', set())
         self.session_cap = session_cap  # max number of sessions per mouse
+        self.qc_params = qc_params
 
         # Set up paths and standard attributes.
         self.root = self.set_root()
@@ -50,35 +53,8 @@ class Dataset(ABC):
         self.cohort = self.load_cohort_dict()
         self.palettes = load_config_variables(self.config_path)
         self.add_mouse_palette()
-
-        # Initizalize attributes that will hold data.
-        self.ts = pd.DataFrame()
-        self.trials = pd.DataFrame()
         self.channels = self.set_channels()
-        self.sig_channels = set()
-
-        # Load all data.
-        if not isinstance(mice, list):
-            self.mouse_ = mice
-            multi_sessions = self.read_multi_sessions(qc_params)
-            self.ts = multi_sessions.get('ts')
-            self.trials = multi_sessions.get('trials')
-        else:
-            self.read_multi_mice(qc_params)
-
-        self.trials = bf.order_sessions(self.trials)
-
-        self.sig_channels = list(self.sig_channels) if isinstance(self.sig_channels, set) else []
-        self.sig_channels.sort()
-
-        # Some validation steps on loaded data.
-        self.get_sampling_freq()
-        self.check_event_order()
-
-        # Downcast datatypes to make more memory efficient.
-        self.downcast_dtypes()
-
-        gc.collect()
+        self.hemi_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
 
     @abstractmethod
     def set_root(self):
@@ -121,6 +97,37 @@ class Dataset(ABC):
         '''Define channels to include as neural signal.'''
         channels = {'z_grnL', 'z_grnR', 'z_redR', 'z_redL'}
         return channels
+
+    def load_data(self):
+
+        # Initizalize attributes that will hold data.
+        self.ts = pd.DataFrame()
+        self.trials = pd.DataFrame()
+        self.sig_channels = set()
+
+        # Load all data.
+        if not isinstance(self.mice, list):
+            self.mouse_ = self.mice
+            multi_sessions = self.read_multi_sessions(self.qc_params)
+            self.ts = multi_sessions.get('ts')
+            self.trials = multi_sessions.get('trials')
+        else:
+            self.read_multi_mice(self.qc_params)
+
+        self.trials = bf.order_sessions(self.trials)
+
+        self.sig_channels = (list(self.sig_channels)
+                             if isinstance(self.sig_channels, set) else [])
+        self.sig_channels.sort()
+
+        # Some validation steps on loaded data.
+        self.get_sampling_freq()
+        self.check_event_order()
+
+        # Downcast datatypes to make more memory efficient.
+        self.downcast_dtypes()
+
+        gc.collect()
 
     def update_columns(self, trials, ts):
 
@@ -594,6 +601,57 @@ class Dataset(ABC):
         self.ts = cast_object_to_category(self.ts)
         self.trials = cast_object_to_category(self.trials)
 
+    def align_to_event(self, events='', cleaning_params={}, **kwargs):
+
+        store_ts = kwargs.pop('store_ts', False)
+        align_params = {
+            'window': (1, 2),
+            'quantify_peaks': True,
+            'fs': self.fs,
+            'channel': self.sig_channels
+        }
+
+        for key, arg in kwargs.items():
+            align_params[key] = arg
+        print(align_params)
+
+        self.trials_aligned = self.trials.copy()
+        for event in events:
+            self.trials_aligned = align.align_photometry_to_event(
+                self.trials_aligned,
+                self.ts,
+                aligned_event=event,
+                **align_params
+            )
+
+        if cleaning_params:
+            self.post_alignment_cleaning(cleaning_params, store_ts)
+
+    def post_alignment_cleaning(self, cleaning_params, store_ts=False):
+
+        print('cleaning data post alignment')
+
+        # Now it's ok to start dropping trials because we've stored photometry
+        # snippets.
+
+        # Remove trials missing licks (selection or consumption).
+        if cleaning_params['drop_timeouts']:
+            self.ts_aligned, self.trials_aligned = align.trim_trials_without_licks(
+                self.ts,
+                self.trials_aligned
+            )
+        else:
+            self.ts_aligned = self.ts.copy()
+
+        # Clean up data (e.g. to remove penalties, timeouts, late blocks, etc).
+        self.trials_aligned, self.ts_aligned, self.dropped_trials = clean_data(
+            self.trials_aligned,
+            self.ts_aligned,
+            **cleaning_params
+        )
+        cleaning_params['dropped_trials'] = self.dropped_trials
+        if not store_ts: del self.ts_aligned
+        gc.collect()
 
 class ProbHFPhotometry(Dataset):
 
