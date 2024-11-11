@@ -310,7 +310,7 @@ def html_to_pageless_pdf(input_html, output_pdf):
 def set_notebook_params(grp_key, notebook_id, root='.'):
 
     config_file = configparser.ConfigParser()
-    config_file.read(os.path.join(root, 'prep_data_params.ini'))
+    config_file.read(os.path.join(root, f'{grp_key.lower()}_params.ini'))
 
     # Create dictionary with key:value for each config item
     data_loading_params = {}
@@ -322,7 +322,7 @@ def set_notebook_params(grp_key, notebook_id, root='.'):
     for key in config_file['data_cleaning']:
         data_cleaning_params[key] = eval(config_file['data_cleaning'][key])
 
-    config_file.read('../mouse_cohorts.ini')
+    config_file.read(os.path.join(root, 'mouse_cohorts.ini'))
     data_loading_params['mice'] = eval(config_file['cohorts'].get(grp_key.lower()))
     data_loading_params['label'] = f'{grp_key}/{notebook_id}'
 
