@@ -345,3 +345,46 @@ def calc_grouped_corr(trials, col0, col1, grouping_variable):
             grouping_variable: val
         }
     return pd.DataFrame(rs).T
+
+
+def plot_swarm_and_point(peaks_agg, Data, hue, palette,
+                         size=3, add_pointplot=False, ylim=(-1,7.5)):
+
+    fig = plt.figure(figsize=(6, 3), layout='constrained')
+    subfigs = fig.subfigures(ncols=2, wspace=0.2)
+
+    for subfig, ch in zip(subfigs, Data.sig_channels):
+
+        axs = subfig.subplots(ncols=2, sharey=True)
+
+        for ax, event in zip(axs.flatten(), ['Cue', 'Consumption']):
+            sns.swarmplot(
+                data=peaks_agg, x='Reward', y=f'{event}_{ch}_mean', hue=hue,
+                palette=palette, ax=ax, size=size, legend=False,
+                alpha=0.6 if add_pointplot else 1)
+            if add_pointplot:
+                sns.pointplot(
+                    data=peaks_agg, x='Reward', y=f'{event}_{ch}_mean',
+                    hue=hue, palette=palette, ax=ax, markersize=size*2,
+                    legend=False, linestyle='none', dodge=True, zorder=3,
+                    errorbar=None)
+            ax.axhline(y=0, color='k', ls='--')
+
+            if peaks_agg.Reward.nunique() > 1:
+                tick_labels = [Data.palettes['reward_pal_labels'][v] for v in ax.get_xticks()]
+            else:
+                tick_labels = ['' for v in ax.get_xticks()]
+            ax.set_xticks(
+                ax.get_xticks(), tick_labels,
+                rotation=45, ha='right'
+                )
+            ax.set(xlabel='', title=event, ylabel='session means (z)',
+                   ylim=ylim)
+
+            # if pd.api.types.is_numeric_dtype(peaks_agg[hue]) & (peaks_agg[hue].nunique() > 3):
+            #     print('true')
+            #     avg_plots.convert_leg_to_cbar(fig, ax, cpal=palette)
+            subfig.suptitle(Data.hemi_labels.get(ch[-1]), fontsize=12,
+                            ha='right')
+            sns.despine()
+    return fig
