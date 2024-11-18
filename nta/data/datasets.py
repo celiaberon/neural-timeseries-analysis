@@ -1,17 +1,10 @@
 import gc
-# import getpass
 import os
-import re
 import sys
 
 import numpy as np
 import pandas as pd
-# import seaborn as sns
 from tqdm import tqdm
-
-# from abc import ABC, abstractmethod
-# from pathlib import Path
-
 
 sys.path.append(f'{os.path.expanduser("~")}/GitHub/behavior-helpers/')
 
@@ -22,8 +15,6 @@ from ..features import behavior_features as bf
 from ..features.design_mat import make_design_mat
 from ..features.select_trials import clean_data
 from ..preprocessing import quality_control as qc
-from ..utils import (cast_object_to_category, downcast_all_numeric,
-                     load_config_variables)
 
 
 class PhotometryDataset(HFDataset):
@@ -124,10 +115,6 @@ class PhotometryDataset(HFDataset):
         usecols.extend(list(self.channels) + list(self.ts_add_cols))
         usecols = list(set(usecols))
         return ts_dtypes, usecols
-
-    def custom_update_columns(self, trials, ts):
-        '''Column updates that are dataset-specific.'''
-        return trials, ts
 
     def custom_dataset_pp(self, trials, ts, **kwargs):
         ts = self.eval_photo_sig(ts)
@@ -301,8 +288,6 @@ class ProbHFPhotometry(PhotometryDataset):
     def set_config_path(self):
         '''Sets the path to config file'''
         return self.root
-
-
 
     def set_channels(self):
         channels = {'z_grnL', 'z_grnR'}

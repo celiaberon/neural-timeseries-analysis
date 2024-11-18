@@ -10,41 +10,6 @@ import seaborn as sns
 from IPython.core.magic import register_cell_magic
 
 
-def load_config_variables(path_to_file: str,
-                          section: str = 'color_palette') -> dict:
-
-    '''
-    Create dictionary containing parameter values that will be repeated
-    across notebooks
-
-    Args:
-        section:
-           Section name within configuration file.
-
-    Returns:
-        config_variables:
-            Dictionary containing variables and assigned values from config
-            file.
-    '''
-
-    # For color palette configuration only
-    import matplotlib as mpl
-    cpal = mpl.cm.RdBu_r(np.linspace(0, 1, 8))
-
-    if not os.path.isfile(os.path.join(path_to_file, 'plot_config.ini')):
-        path_to_file = os.getcwd()
-
-    config_file = configparser.ConfigParser()
-    config_file.read(os.path.join(path_to_file, 'plot_config.ini'))
-
-    # Create dictionary with key:value for each config item
-    config_variables = {}
-    for key in config_file[section]:
-        config_variables[key] = eval(config_file[section][key])
-
-    return config_variables
-
-
 def repeat_and_store(num_reps):
 
     '''
@@ -240,26 +205,6 @@ def write_metadata_roc(*args, **kwargs):
     write_metadata(fname, metadata)
 
 
-def downcast_all_numeric(df):
-
-    fcols = df.select_dtypes('float').columns
-    icols = df.select_dtypes('integer').columns
-
-    df[fcols] = df[fcols].apply(pd.to_numeric, downcast='float')
-    df[icols] = df[icols].apply(pd.to_numeric, downcast='integer')
-
-    return df
-
-
-def cast_object_to_category(df):
-
-    cols = df.select_dtypes('object').columns
-    for col in cols:
-        df[col] = df[col].astype('category')
-
-    return df
-
-
 def loop_cell_adjust_legend(flag, sp_idx, ax, n_groups, **kwargs):
     if (sp_idx == (n_groups - 1)) or (not flag):
         ax.get_legend().set(**kwargs)
@@ -324,6 +269,6 @@ def set_notebook_params(grp_key, notebook_id, root='.'):
 
     config_file.read(os.path.join(root, 'mouse_cohorts.ini'))
     data_loading_params['mice'] = eval(config_file['cohorts'].get(grp_key.lower()))
-    data_loading_params['label'] = f'{grp_key}/{notebook_id}'
+    data_loading_params['label'] = f'{grp_key.lower()}/{notebook_id.lower()}'
 
     return data_loading_params, data_cleaning_params
