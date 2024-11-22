@@ -6,6 +6,7 @@ Created on Mon Jan 17 15:22:38 2022
 @author: celiaberon
 """
 
+import itertools
 from functools import partial
 
 import matplotlib as mpl
@@ -16,7 +17,7 @@ import seaborn as sns
 from pandas.api.types import is_numeric_dtype
 
 from ..events.align import get_lick_times
-from ..utils import save_plot_metadata
+from ..utils import label_hemi, save_plot_metadata
 
 
 def plot_loop(trials, subplot_iter, iter_label, **kwargs):
@@ -24,6 +25,7 @@ def plot_loop(trials, subplot_iter, iter_label, **kwargs):
     fig, axs = None, None
 
     for plot_iter, item in enumerate(subplot_iter, start=1):
+        trials_ = trials.copy()
         n_iters = [len(subplot_iter), plot_iter - 1]
         leg = kwargs.get("leg_override", plot_iter >= n_iters[0])
 
@@ -34,8 +36,12 @@ def plot_loop(trials, subplot_iter, iter_label, **kwargs):
             case 'channel':
                 event = kwargs.get('event')
                 channel = item
+            case 'trial_type':
+                event = kwargs.get('event')
+                channel = kwargs.get('channel')
+                trials_ = trials_.query(item)
 
-        exploded_trials, photometry_column = explode_trials(trials, event, channel)
+        exploded_trials, photometry_column = explode_trials(trials_, event, channel)
 
         fig, axs = plot_trial_type_comparison(
             exploded_trials,
@@ -144,8 +150,10 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
         **kwargs
     )
 
+    single_color = len(set([ch[-4:-1] for ch in sig_channels])) == 1
     channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
-    [ax.set_title(channel_labels.get(ch[-1]), loc='left', pad=20, fontsize=12)
+    [ax.set_title(channel_labels.get(ch[-1]) if single_color else label_hemi(ch),
+                  loc='left', pad=20, fontsize=12)
      for ax, ch in zip(axs, sig_channels)]
 
     if kwargs.get('save', False):
@@ -153,131 +161,74 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
 
     return fig, axs
 
-# def plotting_wrapper(trials: pd.DataFrame,
-#                      alignment_states: list = None,
-#                      channel: str = None,
-#                      **kwargs):
 
-#     '''
-#     Plot panel of photometry figures, with subplot for each aligned event.
+def plotting_wrapper_trial_types(trials: pd.DataFrame,
+                                 queries: list[str],
+                                 labels: list[str]=None,
+                                 alignment_states: list = None,
+                                 channel: str = None,
+                                 **kwargs):
 
-#     Args:
-#         trials:
-#             Trial-based data containing aligned photometry snippets and
-#             timestamps.
-#         alignment_states:
-#             List of events to plot aligned neural data to.
-#         channel:
-#             L or R hemisphere photometry channel.
-#         **kwargs:
-#             See plot_trial_type_comparison().
+    '''
+    Plot panel of photometry figures, with subplot for each aligned event.
 
-#     Returns:
-#         fig:
-#             Figure object containing created and filled plot.
-#         axs:
-#             Axes object containing created and filled plot.
-#     '''
+    Args:
+        trials:
+            Trial-based data containing aligned photometry snippets and
+            timestamps.
+        alignment_states:
+            List of events to plot aligned neural data to.
+        channel:
+            L or R hemisphere photometry channel.
+        **kwargs:
+            See plot_trial_type_comparison().
 
-#     axs = None
-#     fig = None
+    Returns:
+        fig:
+            Figure object containing created and filled plot.
+        axs:
+            Axes object containing created and filled plot.
+    '''
 
-#     # Default to plotting 3 main trial events.
-#     if alignment_states is None:
-#         alignment_states = ['Cue', 'Select', 'Consumption']
+    fig, axs = plot_loop(
+        trials,
+        queries,
+        event=alignment_states,
+        iter_label='trial_type',
+        channel=channel,
+        **kwargs
+    )
 
-#     # Iteratively fill subplots with each event-alignd photometry trace.
-#     for plot_iter, event in enumerate(alignment_states, start=1):
-#         n_iters = [len(alignment_states), plot_iter - 1]
+    [ax.set_title(label, loc='left', pad=20, fontsize=12)
+     for ax, label in zip(axs, labels)]
 
-#         leg = kwargs.get('leg_override', plot_iter >= n_iters[0])
-#         photometry_column = f'{event}_{channel}'
-#         exploded_trials = (trials.copy()
-#                            .dropna(subset=[photometry_column])
-#                            .explode(column=[photometry_column,
-#                                             f'{event}_times'])
-#                            )
-#         fig, axs = plot_trial_type_comparison(exploded_trials,
-#                                               align_event=event,
-#                                               y_col=photometry_column,
-#                                               n_iters=n_iters,
-#                                               show_leg=leg,
-#                                               fig=fig,
-#                                               axs=axs,
-#                                               **kwargs)
+    if kwargs.get('save', False):
+        fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
 
-#     if kwargs.get('save', False):
-#         fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
-
-#     return fig, axs
+    return fig, axs
 
 
-# def plotting_wrapper_channels(trials: pd.DataFrame,
-#                               event: list = None,
-#                               channels: list[str] = None,
-#                               **kwargs):
+def compose_queries_and_labels(cols, vals, mapping, ops=None):
 
-#     '''
-#     Plot all channels with data aligned to a given photmetry event.
+    queries = []
+    labels = []
 
-#     Args:
-#         trials:
-#             Trial-based data containing aligned photometry snippets and
-#             timestamps.
-#         event:
-#             Single event to plot aligned neural data to.
-#         channels:
-#             Typically L and R hemisphere photometry channel.
-#         **kwargs:
-#             See plot_trial_type_comparison().
+    ops = ops or ['==' for _ in range(len(cols))]
 
-#     Returns:
-#         fig:
-#             Figure object containing created and filled plot.
-#         axs:
-#             Axes object containing created and filled plot.
-#     '''
+    for val_combo in itertools.product(*vals):
+        col_val_pairing = zip(cols, val_combo)
+        label = ''
+        query = ''
+        for i, (col, val) in enumerate(col_val_pairing):
+            if i > 0:
+                label += '\n'
+                query += ' & '
+            label += f'{mapping["cols"].get(col)}: {mapping["vals"].get(val)}'
+            query += f'{col}{ops[i]}{val}'
+        queries.append(query)
+        labels.append(label)
 
-#     axs = None
-#     fig = None
-
-#     if not isinstance(channels, list):
-#         channels = [channels]
-
-#     # Quick check for whether provided channels have signal at all.
-#     sig_channels = [ch for ch in channels
-#                     if len(trials.dropna(subset=[f'{event}_{ch}'])) > 0]
-
-#     channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
-
-#     # Iteratively fill subplots with each event-alignd photometry trace.
-#     for plot_iter, ch in enumerate(sig_channels, start=1):
-#         n_iters = [len(sig_channels), plot_iter - 1]
-
-#         leg = kwargs.get('leg_override', plot_iter >= n_iters[0])
-#         photometry_column = f'{event}_{ch}'
-#         exploded_trials = (trials.copy()
-#                            .dropna(subset=[photometry_column])
-#                            .explode(column=[photometry_column,
-#                                             f'{event}_times'])
-#                            )
-#         fig, axs = plot_trial_type_comparison(
-#             exploded_trials,
-#             align_event=event,
-#             y_col=photometry_column,
-#             n_iters=n_iters,
-#             show_leg=leg,
-#             fig=fig,
-#             axs=axs,
-#             **kwargs)
-
-#     [ax.set_title(channel_labels.get(ch[-1]), loc='left', pad=20, fontsize=12)
-#      for ax, ch in zip(axs, sig_channels)]
-
-#     if kwargs.get('save', False):
-#         fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
-
-#     return fig, axs
+    return queries, labels
 
 
 def set_new_axes(n_iters: list,
@@ -303,6 +254,7 @@ def set_new_axes(n_iters: list,
         fig (matplotlib.figure object)
         axs (matplotlib.axes object)
     '''
+    col_wrap = kwargs.pop('col_wrap', 3)
 
     if figsize is None:
         subplot_width = 4.0
@@ -310,8 +262,8 @@ def set_new_axes(n_iters: list,
     else:
         subplot_width, subplot_height = figsize
 
-    nrows = int(np.ceil(n_iters[0] / 3))
-    ncols = min(n_iters[0], 3)
+    nrows = int(np.ceil(n_iters[0] / col_wrap))
+    ncols = min(n_iters[0], col_wrap)
 
     dims = (subplot_width * ncols, subplot_height * nrows)
     if behavior_hist:  # 2 plots per alignment with behavior distributions
@@ -462,21 +414,23 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
             New/updated figure and axes objects.
     '''
 
-    sns.set(style='ticks', font_scale=1.0, rc={'axes.labelsize': 11,
-                                               'axes.titlesize': 11,
-                                               'savefig.transparent': True,
-                                               'legend.title_fontsize': 11,
-                                               'legend.fontsize': 10,
-                                               'legend.borderpad': 0.2,
-                                               'figure.titlesize': 11,
-                                               'figure.subplot.wspace': 0.1,
-                                               })
+    sns.set_theme(style='ticks',
+                  font_scale=1.0,
+                  rc={'axes.labelsize': 11,
+                      'axes.titlesize': 11,
+                      'savefig.transparent': True,
+                      'legend.title_fontsize': 11,
+                      'legend.fontsize': 10,
+                      'legend.borderpad': 0.2,
+                      'figure.titlesize': 11,
+                      'figure.subplot.wspace': 0.1,
+                      })
 
     n_iters = n_iters or [1, 0]
 
     # Plot aesthetics and designate current ax1: lineplot, ax2: behavior.
     cpal, kwargs = config_plot_cpal(ts, column, **kwargs)
-    if n_iters[1] == 0:
+    if fig is None:  # n_iters[1] == 0:
         fig, axs = set_new_axes(n_iters=n_iters,
                                 behavior_hist=behavior_hist,
                                 **kwargs)
