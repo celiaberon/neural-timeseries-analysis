@@ -13,6 +13,8 @@ import pandas as pd
 import scipy.signal as signal
 from scipy import stats as st
 
+from ..utils import single_session
+
 
 def set_analog_headers(beh_timeseries: pd.DataFrame) -> pd.DataFrame:
 
@@ -107,7 +109,7 @@ def handshake_sync_pulses(photo_timeseries: pd.DataFrame) -> pd.DataFrame:
 
 def trim_at_sync_pulses(timeseries: pd.DataFrame,
                         nth_pulse: int = 1,
-                        sync_col: str = 'fromBehSys') -> pd.DataFrame:
+                        sync_col: str = 'sync_pulse') -> pd.DataFrame:
 
     '''
     Crop timeseries between first (or nth) and last (or -nth) sync pulses.
@@ -125,9 +127,10 @@ def trim_at_sync_pulses(timeseries: pd.DataFrame,
             Cropped timeseries dataframe.
     '''
 
+    print('reminder, trimming to first 0->1, new from 1->0  with fromBehSys')
     ts_ = timeseries.copy()
 
-    pulse_onsets = ts_.query(f'{sync_col} == 0').index.values
+    pulse_onsets = ts_.query(f'{sync_col} == 1').index.values
     ts_ = ts_.loc[pulse_onsets[nth_pulse - 1]: pulse_onsets[-nth_pulse]]
     ts_ = ts_.reset_index(drop=True)
 
@@ -459,7 +462,7 @@ def align_behav_photo(beh_timeseries: pd.DataFrame,
     return beh_ts_trimmed, photo_ts_trimmed
 
 
-def find_nearest_time(all_times: np.array, x: float) -> int:
+def find_nearest_time(all_times: np.array, x: float, err=0.1) -> int:
 
     '''
     Returns time that minimizes differences between instantaneous timepoint
@@ -474,9 +477,18 @@ def find_nearest_time(all_times: np.array, x: float) -> int:
             Index of nearest timepoint in `all_times` to `x`.
     '''
 
-    return np.argmin(np.abs(all_times - x))
+    nearest_timepoint = np.argmin(np.abs(all_times - x))
+    acceptable_err = np.min(np.abs(all_times - x)) < err
+    if not acceptable_err:
+        if nearest_timepoint == (len(all_times)-1):
+            return -1  #  -1 for last timepoint not matching
+        else:
+            raise AssertionError('no matching timepoint found within error limit')
+
+    return nearest_timepoint
 
 
+@single_session
 def map_events_by_time(target_ts: pd.DataFrame,
                        orig_ts: pd.DataFrame,
                        event_col: str) -> pd.DataFrame:
@@ -504,7 +516,8 @@ def map_events_by_time(target_ts: pd.DataFrame,
                       'ENLP': True,
                       'CueP': True,
                       'outcome_licks': True,
-                      'fromBehSys': True}
+                      'fromBehSys': True,
+                      'sync_pulse': True}
     onset_only = onset_only_LUT.get(event_col, False)
 
     target_ts_ = target_ts.copy()
@@ -519,18 +532,26 @@ def map_events_by_time(target_ts: pd.DataFrame,
     event_ids = events[event_col].values
 
     find_nearest_time_ = partial(find_nearest_time, target_ts_.session_clock)
-    event_idcs = list(map(find_nearest_time_, event_times))
+    event_idcs = np.array(list(map(find_nearest_time_, event_times)))
+    # Filter out bad match on last trial if necessary.
+    event_ids = event_ids[event_idcs >= 0]
+    event_idcs = event_idcs[event_idcs >= 0]
     event_idcs = target_ts_.iloc[event_idcs].index.values
 
     # For impulse events where on/off indices are the same.
     if onset_only:
         target_ts_[event_col] = 0
         target_ts_.loc[event_idcs, event_col] = event_ids
+        assert np.allclose(sum(event_ids), target_ts_[event_col].sum(), atol=1), (
+            'failed to map accurately')
 
     # For step functions need to fill between onset and offset.
     else:
         target_ts_[event_col] = np.nan
         target_ts_.loc[event_idcs, event_col] = events[event_col].values
         target_ts_[event_col] = target_ts_[event_col].ffill()
+
+        assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=1), (
+            'failed to map accurately')
 
     return target_ts_
