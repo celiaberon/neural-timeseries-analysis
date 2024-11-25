@@ -35,9 +35,6 @@ class PhotometryDataset(HFDataset):
     def load_data(self):
 
         # Initizalize attributes that will hold data.
-        # self.ts = pd.DataFrame()
-        # self.trials = pd.DataFrame()
-        # self.sig_channels = set()
 
         # Load all data.
         if not isinstance(self.mice, list):
@@ -277,48 +274,7 @@ class PhotometryDataset(HFDataset):
         gc.collect()
 
 
-class ProbHFPhotometry(PhotometryDataset):
-
-    def __init__(self,
-                 mice: str | list[str],
-                 **kwargs):
-
-        super().__init__(mice, **kwargs)
-
-    def set_config_path(self):
-        '''Sets the path to config file'''
-        return self.root
-
-    def set_channels(self):
-        channels = {'z_grnL', 'z_grnR'}
-        return channels
-
-    def cleanup_cols(self, df_dict):
-
-        '''Remove unnecessary columns to minimize memory usage.'''
-
-        # Drop columns that aren't typically accessed for analysis but were
-        # necessary for preprocessing.
-        cols_to_drop = {'state_ENL_preCueP', 'state_CueP', 'state_ENLP',
-                        'stateConsumption', 'CueP', 'iLick', 'ILI',
-                        'bout_group', 'cons_bout'
-                        } & set(df_dict['ts'].columns)
-        cols_to_drop = list(cols_to_drop - self.ts_add_cols)
-        df_dict['ts'] = df_dict['ts'].drop(columns=cols_to_drop)
-
-        cols_to_drop = {'k1', 'k2', 'k3', '+1seq2', 'RL_seq2', 'RL_seq3',
-                        '-1seq3', '+1seq3',
-                        } & set(df_dict['trials'].columns)
-        col_to_drop = list(cols_to_drop - self.trls_add_cols)
-        df_dict['trials'] = df_dict['trials'].drop(columns=col_to_drop)
-
-        gc.collect()
-
-        return df_dict
-
-
-
-class ProbHFPhotometryTails(ProbHFPhotometry):
+class ProbHFPhotometryTails(PhotometryDataset):
 
     '''
     Bypasses standard session trimming to include all data, even at beginning
@@ -391,10 +347,3 @@ class SplitConditions(PhotometryDataset):
     def set_session_path(self):
         '''Sets path to single session data'''
         return self.data_path / self.mouse_ / self.session_
-
-    def set_channels(self):
-        channels = {'z_grnL', 'z_grnR'}
-        return channels
-
-    def custom_update_columns(self, trials, ts):
-        pass
