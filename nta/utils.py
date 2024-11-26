@@ -272,3 +272,15 @@ def set_notebook_params(grp_key, notebook_id, root='.'):
     data_loading_params['label'] = f'{grp_key.lower()}/{notebook_id.lower()}'
 
     return data_loading_params, data_cleaning_params
+
+
+def label_hemi(ch, all_channels):
+    hemisphere_labels = {'L': 'Left Hemi', 'R': 'Right Hemi'}
+
+    single_color = len(set([ch[-4:-1] for ch in all_channels])) == 1
+    if single_color:
+        label = hemisphere_labels.get(ch[-1])
+    else:
+        label = f'{hemisphere_labels.get(ch[-1])}: {ch.split("_")[1][:3]}'
+
+    return label
