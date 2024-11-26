@@ -6,6 +6,7 @@ Created on Fri Aug 12 13:30:18 2022
 @author: celiaberon
 """
 
+import os
 from math import modf
 
 import matplotlib.pyplot as plt
@@ -13,7 +14,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from ..utils import save_plot_metadata
+from ..utils import label_hemi, save_plot_metadata
+from ..visualization import avg_plots
 
 
 @save_plot_metadata
@@ -129,7 +131,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 
     if kwargs.get('save'):
         if not isinstance(fig, plt.Figure):
-            print('skipping save, not main figure')
+            pass
         else:
             fig.savefig(kwargs.get('fname'), dpi=200, bbox_inches='tight')
 
@@ -323,22 +325,56 @@ def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
     return ax
 
 
-def plot_correlation(r, col0, col1, ax=None, hue=None, palette=None, legend=True, **kwargs):
+def plot_correlation(r, col0_label, col1_label, ax=None, hue=None,
+                     palette=None, legend=True, **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
-    sns.barplot(data=r, x='channel', y='r', hue=hue, palette=palette, ax=ax, legend=legend)
+    sns.barplot(data=r, x='channel', y='r', hue=hue, palette=palette, ax=ax,
+                legend=legend)
     ax.axhline(y=0, color='k')
-    ax.set(ylim=(-1, 1), title=f'correlation {col0}\nvs. {col1}', xlabel='hemisphere')
+    ax.set(ylim=(-1, 1),
+           title=f'correlation {col0_label}\nvs. {col1_label}',
+           xlabel='hemisphere')
     plt.legend(bbox_to_anchor=(1.8, 1))
     sns.despine()
 
 
-def calc_grouped_corr(trials, col0, col1, grouping_variable):
+def calc_grouped_corr(trials: pd.DataFrame,
+                      col0: str,
+                      col1: str,
+                      grouping_variable: str) -> pd.DataFrame:
+
+    '''
+    Calculate the pairwise correlation coefficients between two columns
+    within groups defined by a grouping variable in a DataFrame.
+
+    Args:
+        trials
+            The input DataFrame containing the data.
+        col0, col1
+            The names of the columns for which to calculate the correlation.
+        grouping_variable
+            The column name used to group the data before calculating correlations.
+
+    Returns:
+        A DataFrame containing the correlation coefficients (`r`) for each
+        group and the corresponding value of the grouping variable. Each row
+        corresponds to a unique group, with the correlation coefficient and
+        the group value.
+
+    Notes:
+    - The function drops missing values (`NaN`) in the grouping variable before
+      processing.
+    - Correlation is computed using the `.corr()` method of pandas, which
+      defaults to Pearson correlation.
+    - Assumes that `trials` contains numeric data in `col0` and `col1`.
+    '''
+
     rs = {}
     for i, val in enumerate(trials[grouping_variable].dropna().unique()):
         rs[i] = {
             'r': (trials
-                  .groupby(grouping_variable)[[col0, col1]]
+                  .groupby(grouping_variable, observed=True)[[col0, col1]]
                   .corr()
                   .reset_index()
                   .query(f'level_1 == @col1 & {grouping_variable} == @val')[col0].item()),
@@ -348,43 +384,92 @@ def calc_grouped_corr(trials, col0, col1, grouping_variable):
 
 
 def plot_swarm_and_point(peaks_agg, Data, hue, palette,
-                         size=3, add_pointplot=False, ylim=(-1,7.5)):
+                         size=3, add_pointplot=False, ylim=(-1, 7.5),
+                         events=['Cue', 'Consumption'], **kwargs):
 
-    fig = plt.figure(figsize=(6, 3), layout='constrained')
-    subfigs = fig.subfigures(ncols=2, wspace=0.2)
-
+    n_events = len(events)
+    x_col = kwargs.get('x', 'Reward')
+    width = peaks_agg[x_col].nunique() * n_events * 1.5
+    fig = plt.figure(figsize=(width, 3), layout='constrained')
+    subfigs = fig.subfigures(ncols=len(Data.sig_channels), wspace=0.2)
     for subfig, ch in zip(subfigs, Data.sig_channels):
+        axs = subfig.subplots(ncols=n_events, sharey=True)
 
-        axs = subfig.subplots(ncols=2, sharey=True)
-
-        for ax, event in zip(axs.flatten(), ['Cue', 'Consumption']):
+        axs = axs.flatten() if isinstance(axs, np.ndarray) else [axs]
+        for ax, event in zip(axs, events):
+            y_col = f'{event}_{ch}_{kwargs.get("y_suffix", "mean")}'
             sns.swarmplot(
-                data=peaks_agg, x='Reward', y=f'{event}_{ch}_mean', hue=hue,
-                palette=palette, ax=ax, size=size, legend=False,
+                data=peaks_agg, x=x_col, y=y_col,
+                hue=hue, palette=palette, ax=ax, size=size,  # legend=False,
                 alpha=0.6 if add_pointplot else 1)
             if add_pointplot:
                 sns.pointplot(
-                    data=peaks_agg, x='Reward', y=f'{event}_{ch}_mean',
+                    data=peaks_agg, x=x_col, y=y_col,
                     hue=hue, palette=palette, ax=ax, markersize=size*2,
                     legend=False, linestyle='none', dodge=True, zorder=3,
                     errorbar=None)
             ax.axhline(y=0, color='k', ls='--')
 
-            if peaks_agg.Reward.nunique() > 1:
+            if x_col != 'Reward':
+                tick_labels = ax.get_xticklabels()
+            elif peaks_agg['Reward'].nunique() > 1:
                 tick_labels = [Data.palettes['reward_pal_labels'][v] for v in ax.get_xticks()]
             else:
                 tick_labels = ['' for v in ax.get_xticks()]
             ax.set_xticks(
                 ax.get_xticks(), tick_labels,
-                rotation=45, ha='right'
-                )
+                rotation=45, ha='right')
             ax.set(xlabel='', title=event, ylabel='session means (z)',
                    ylim=ylim)
 
-            # if pd.api.types.is_numeric_dtype(peaks_agg[hue]) & (peaks_agg[hue].nunique() > 3):
-            #     print('true')
-            #     avg_plots.convert_leg_to_cbar(fig, ax, cpal=palette)
+            if pd.api.types.is_numeric_dtype(peaks_agg[hue]) & (peaks_agg[hue].nunique() > 3):
+                avg_plots.convert_leg_to_cbar(fig, ax, cpal=palette)
+            else:
+                ax.legend().remove()
             subfig.suptitle(Data.hemi_labels.get(ch[-1]), fontsize=12,
                             ha='right')
             sns.despine()
     return fig
+
+
+def plot_baseline_vs_TENL(Data, trials, base_args, args, plot_id):
+
+    '''Convenient function for common peak plot'''
+    base_args['plot_func_kws'].update(args['plot_func_kws'])
+    fig = plt.figure(figsize=(len(Data.sig_channels)*3, 2.2), layout='constrained')
+    subfigs = fig.subfigures(ncols=len(Data.sig_channels)+1)
+
+    corrs = pd.DataFrame()
+    # single_color = len(set([ch[-4:-1] for ch in Data.sig_channels])) == 1
+    for subfig, ch in zip(subfigs, Data.sig_channels):
+        base_args['mosaic_kws'] = {'subfig': subfig}
+
+        _, ax = plot_peaks_wrapper(
+            trials,
+            channel=ch,
+            fname=os.path.join(Data.save_path, f'{plot_id}_{ch}.png'),
+            **base_args
+        )
+        ax['Cue'].set_xticks(ax['Cue'].get_xticks(), ax['Cue'].get_xticklabels(), rotation=45)
+        ax['Cue'].set(ylim=(-2, 1), ylabel='z-score', title='')
+
+        # Annotate subfigure with hemisphere label
+        # hemi_label = Data.hemi_labels.get(ch[-1]) if single_color else label_hemi(ch)
+        hemi_label = label_hemi(ch, Data.sig_channels)
+        subfig.suptitle(hemi_label, fontsize=12, y=1.1)
+
+        # Calculate correlation for the channel
+        channel_corr = calc_grouped_corr(
+            trials,
+            grouping_variable=args['plot_func_kws']['hue'],
+            col0=base_args['x_col'],
+            col1=f'Cue_{ch}_offset'
+        )
+        channel_corr['channel'] = hemi_label #.split()[0]
+        corrs = pd.concat((corrs, channel_corr)).reset_index(drop=True)
+
+    plot_correlation(corrs, col0_label=base_args['x_col'],
+                     col1_label='baseline',
+                     ax=subfigs[-1].subplots(), legend=False,
+                     **args['plot_func_kws'])
+    return fig, corrs
