@@ -152,7 +152,7 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
 
     single_color = len(set([ch[-4:-1] for ch in sig_channels])) == 1
     channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
-    [ax.set_title(channel_labels.get(ch[-1]) if single_color else label_hemi(ch),
+    [ax.set_title(label_hemi(ch, channels),
                   loc='left', pad=20, fontsize=12)
      for ax, ch in zip(axs, sig_channels)]
 
@@ -360,7 +360,6 @@ def config_plot_cpal(ts, column, *, cmap_colors=None, **kwargs):
             labels = np.sort(np.insert(labels, 0, 0))
         cpal = {label: color for label, color in zip(labels, cpal)}
     kwargs.update({'cpal': cpal})
-
     return cpal, kwargs
 
 
