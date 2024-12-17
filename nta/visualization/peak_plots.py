@@ -337,6 +337,7 @@ def plot_correlation(r, col0_label, col1_label, ax=None, hue=None,
            xlabel='hemisphere')
     plt.legend(bbox_to_anchor=(1.8, 1))
     sns.despine()
+    return ax
 
 
 def calc_grouped_corr(trials: pd.DataFrame,
@@ -389,7 +390,7 @@ def plot_swarm_and_point(peaks_agg, Data, hue, palette,
 
     n_events = len(events)
     x_col = kwargs.get('x', 'Reward')
-    width = peaks_agg[x_col].nunique() * n_events * 1.5
+    width = (peaks_agg[x_col].nunique() + 0.5) * n_events * np.max((len(Data.sig_channels)-1.5, 1)) * 1.5
     fig = plt.figure(figsize=(width, 3), layout='constrained')
     subfigs = fig.subfigures(ncols=len(Data.sig_channels), wspace=0.2)
     for subfig, ch in zip(subfigs, Data.sig_channels):
@@ -426,7 +427,7 @@ def plot_swarm_and_point(peaks_agg, Data, hue, palette,
                 avg_plots.convert_leg_to_cbar(fig, ax, cpal=palette)
             else:
                 ax.legend().remove()
-            subfig.suptitle(Data.hemi_labels.get(ch[-1]), fontsize=12,
+            subfig.suptitle(label_hemi(ch, Data.sig_channels), fontsize=12,
                             ha='right')
             sns.despine()
     return fig
