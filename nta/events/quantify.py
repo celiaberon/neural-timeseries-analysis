@@ -293,7 +293,7 @@ def group_peak_quantification(trials: pd.DataFrame,
 
         # Grab subset of rows for peak averaging.
         agg_df = (exp_trials.loc[snippet_idcs]
-                  .query(f'{times_col} > 0')  # can only happen after event
+                  .query(f'{times_col} >= 0')  # can only happen after event
                   .groupby('nTrial', as_index=True)
                   .agg({channel_col: af})
                   .rename(columns={channel_col: peak_col}))

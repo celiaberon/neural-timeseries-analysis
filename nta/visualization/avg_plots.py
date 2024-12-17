@@ -356,7 +356,7 @@ def config_plot_cpal(ts, column, *, cmap_colors=None, **kwargs):
 
     if (not isinstance(cpal, dict)) & is_numeric_dtype(ts[column]):
         labels = np.sort(ts[column].dropna().unique())
-        if any(labels < 0) & any(labels > 0) & ~any(labels == 0):
+        if any(labels < 0) & any(labels > 0) & (not any(labels == 0)):
             labels = np.sort(np.insert(labels, 0, 0))
         cpal = {label: color for label, color in zip(labels, cpal)}
     kwargs.update({'cpal': cpal})

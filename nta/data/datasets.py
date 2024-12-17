@@ -139,7 +139,7 @@ class PhotometryDataset(HFDataset):
         '''
 
         # If no photometry channels passed QC, move on to next session.
-        sensors = self.get_sensors()
+        sensors = self.get_sensors()  # only evaluates on z-scored ts
         if self.qc_photo:
             sig_cols = {ch for ch in self.channels
                         if not qc.is_normal(ts.get(ch, None),
