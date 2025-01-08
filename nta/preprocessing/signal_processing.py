@@ -215,7 +215,10 @@ def rolling_demodulation(trace: np.array,
             Timestamps corresponding to each sample in `rolling_demod`.
     '''
 
-    win = signal.hamming(nperseg, 'periodic')
+    try:
+        win = signal.hamming(nperseg, 'periodic')
+    except AttributeError:  # for different scipy versions
+        win = signal.windows.hamming(nperseg, 'periodic')
 
     f, t_, Zxx = signal.spectrogram(trace,
                                     sampling_Hz,
