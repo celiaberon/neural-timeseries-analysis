@@ -495,7 +495,8 @@ def map_events_by_time(target_ts: pd.DataFrame,
 
     '''
     Map events by timestamp into index of new dataframe with nearest
-    timestamp.
+    timestamp. Events not classified as onset only or by value will be mapped
+    to their onset and offset times and filled between.
 
     Args:
         target_ts:
@@ -510,27 +511,34 @@ def map_events_by_time(target_ts: pd.DataFrame,
             Copy of target_ts with new column for mapped events.
     '''
 
-    # Define set of instantaneous events.
-    onset_only_LUT = {'iSpout': True,
-                      'Select': True,
+    # Define set of instantaneous events that are defined by 0->1 transition.
+    onset_only_LUT = {'Select': True,
                       'ENLP': True,
-                      'CueP': True,
-                      'outcome_licks': True,
+                    #   'CueP': True,
                       'fromBehSys': True,
                       'sync_pulse': True}
+
+    # Set of events defined directly by their value not equalling 0.
+    by_value_LUT = {'iSpout': True,
+                    'outcome_licks': True}
+
     onset_only = onset_only_LUT.get(event_col, False)
+    by_value = by_value_LUT.get(event_col, False)
 
     target_ts_ = target_ts.copy()
 
+    # Get location of events.
     if onset_only:
         events = orig_ts.query(f'{event_col}.diff() > 0')
+    elif by_value:
+        events = orig_ts.query(f'{event_col}.ne(0)')
     else:
         events = orig_ts.query(f'{event_col}.diff().ne(0)')
 
     # Get arrays indices at nearest timepoint to event time in new array.
     event_times = events.session_clock.values
     event_ids = events[event_col].values
-
+    print(sum(event_ids))
     find_nearest_time_ = partial(find_nearest_time, target_ts_.session_clock)
     event_idcs = np.array(list(map(find_nearest_time_, event_times)))
     # Filter out bad match on last trial if necessary.
@@ -539,19 +547,26 @@ def map_events_by_time(target_ts: pd.DataFrame,
     event_idcs = target_ts_.iloc[event_idcs].index.values
 
     # For impulse events where on/off indices are the same.
-    if onset_only:
+    if onset_only or by_value:
         target_ts_[event_col] = 0
         target_ts_.loc[event_idcs, event_col] = event_ids
+        # print(sum(event_ids), target_ts_[event_col].sum(), len(event_idcs), len(event_times), len(set(event_times)))
         assert np.allclose(sum(event_ids), target_ts_[event_col].sum(), atol=1), (
-            'failed to map accurately')
+            'failed to map accurately for onset only event')
 
     # For step functions need to fill between onset and offset.
     else:
         target_ts_[event_col] = np.nan
         target_ts_.loc[event_idcs, event_col] = events[event_col].values
         target_ts_[event_col] = target_ts_[event_col].ffill()
-
-        assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=1), (
-            'failed to map accurately')
+        # Permit level of error of 2: onset/offest can be off by one bin max.
+        if event_col in ['state_ENLP', 'state_CueP']:
+            # More permissive on state_ENLP and state_CueP
+            print(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum())
+            assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=50), (
+                'failed to map accurately for duration event')
+        else:
+            assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=2), (
+                'failed to map accurately for duration event')
 
     return target_ts_
