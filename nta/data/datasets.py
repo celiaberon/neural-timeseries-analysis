@@ -97,6 +97,9 @@ class PhotometryDataset(HFDataset):
             'stateConsumption': np.int8,
             'Consumption': np.int8,
             'state_ENLP': np.int8,
+            'state_CueP': np.int8,
+            'responseTime': np.int8,
+            'state_ENL_preCueP': np.int8,
             'session': 'object',
             'fs': np.float16
         }
