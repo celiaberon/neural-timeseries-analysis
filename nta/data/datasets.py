@@ -48,7 +48,10 @@ class PhotometryDataset(HFDataset):
             self.ts = multi_mice.get('ts')
             self.trials = multi_mice.get('trials')
 
-        self.trials = bf.order_sessions(self.trials)
+        if 'session_order' in self.session_log:
+            self.trials = bf.order_sessions(self.trials, self.session_log)
+        else:
+            self.trials = bf.order_sessions(self.trials)
 
         self.sig_channels = (list(self.sig_channels)
                              if isinstance(self.sig_channels, set) else [])

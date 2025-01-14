@@ -559,15 +559,22 @@ def flag_blocks_for_timeouts(trials, threshold=0.25):
     return trials_
 
 
-def order_sessions(trials):
+def order_sessions(trials, session_log=None):
 
     t_ = trials.copy()
-    t_['Date'] = pd.to_datetime(t_['Date'], format='%Y_%m_%d')
 
-    for mouse, m_dates in t_.groupby('Mouse', observed=True):
-        sorted_dates = np.sort(m_dates.Date.unique())
-        sorted_dates = {date: i for i, date in enumerate(sorted_dates)}
-        t_.loc[t_['Mouse'] == mouse, 'session_order'] = m_dates['Date'].map(sorted_dates)
+    if session_log is not None:
+        session_log = session_log.dropna(subset=['Session'])
+        t_['session_order'] = (t_['Session']
+                               .map(session_log.set_index('Session')['session_order']))
+
+    else:
+        t_['Date'] = pd.to_datetime(t_['Date'], format='%Y_%m_%d')
+
+        for mouse, m_dates in t_.groupby('Mouse', observed=True):
+            sorted_dates = np.sort(m_dates.Date.unique())
+            sorted_dates = {date: i for i, date in enumerate(sorted_dates)}
+            t_.loc[t_['Mouse'] == mouse, 'session_order'] = m_dates['Date'].map(sorted_dates)
 
     return t_
 

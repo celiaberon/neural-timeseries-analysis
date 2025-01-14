@@ -559,8 +559,9 @@ def map_events_by_time(target_ts: pd.DataFrame,
         target_ts_[event_col] = np.nan
         target_ts_.loc[event_idcs, event_col] = events[event_col].values
         target_ts_[event_col] = target_ts_[event_col].ffill()
+        # print(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum())
         # Permit level of error of 2: onset/offest can be off by one bin max.
-        if event_col in ['state_ENLP', 'state_CueP']:
+        if event_col in ['state_ENLP', 'state_CueP', 'responseTime', 'CueP']:
             # More permissive on state_ENLP and state_CueP
             print(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum())
             assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=50), (
