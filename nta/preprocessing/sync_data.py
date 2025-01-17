@@ -562,7 +562,10 @@ def map_events_by_time(target_ts: pd.DataFrame,
         # print(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum())
         # Permit level of error of 2: onset/offest can be off by one bin max.
         if event_col in ['state_ENLP', 'state_CueP', 'responseTime', 'CueP']:
-            # More permissive on state_ENLP and state_CueP
+            # More permissive on state_ENLP and state_CueP. They could differ because of single sample
+            # state transitions that occasionally cause us to miss a 5ms state_ENLP that precedes a
+            # penalty, but we will map the penalty and there is not enough resolution in the downsampled
+            # state to represent the imperceptible pre-penalty state.
             print(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum())
             assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=50), (
                 'failed to map accurately for duration event')
@@ -570,4 +573,4 @@ def map_events_by_time(target_ts: pd.DataFrame,
             assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=2), (
                 'failed to map accurately for duration event')
 
-    return target_ts_
+    return target_ts_, event_times, event_idcs
