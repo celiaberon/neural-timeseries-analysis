@@ -43,7 +43,7 @@ class PhotometryDataset(HFDataset):
             self.ts = multi_sessions.get('ts')
             self.trials = multi_sessions.get('trials')
         else:
-            multi_mice = self.read_multi_mice(self.qc_params, keys=['trials', 'ts'])
+            multi_mice = self.read_multi_mice(self.qc_params, df_keys=['trials', 'ts'])
             # Store data from multi_mice as attributes of dataset.
             self.ts = multi_mice.get('ts')
             self.trials = multi_mice.get('trials')
