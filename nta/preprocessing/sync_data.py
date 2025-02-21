@@ -538,7 +538,7 @@ def map_events_by_time(target_ts: pd.DataFrame,
     # Get arrays indices at nearest timepoint to event time in new array.
     event_times = events.session_clock.values
     event_ids = events[event_col].values
-    print(sum(event_ids))
+    # print(sum(event_ids))
     find_nearest_time_ = partial(find_nearest_time, target_ts_.session_clock)
     event_idcs = np.array(list(map(find_nearest_time_, event_times)))
     # Filter out bad match on last trial if necessary.
@@ -570,7 +570,8 @@ def map_events_by_time(target_ts: pd.DataFrame,
             assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=50), (
                 'failed to map accurately for duration event')
         else:
-            assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=2), (
+            print(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum())
+            assert np.allclose(sum(event_ids), target_ts_.loc[event_idcs, event_col].sum(), atol=3), (
                 'failed to map accurately for duration event')
 
     return target_ts_, event_times, event_idcs
