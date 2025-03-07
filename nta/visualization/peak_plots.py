@@ -378,7 +378,7 @@ def calc_grouped_corr(trials: pd.DataFrame,
                   .groupby(grouping_variable, observed=True)[[col0, col1]]
                   .corr()
                   .reset_index()
-                  .query(f'level_1 == @col1 & {grouping_variable} == @val')[col0].item()),
+                  .query(f'level_1 == @col1 & {grouping_variable} == @val', engine='python')[col0].item()),
             grouping_variable: val
         }
     return pd.DataFrame(rs).T
@@ -393,6 +393,9 @@ def plot_swarm_and_point(peaks_agg, Data, hue, palette,
     width = (peaks_agg[x_col].nunique() + 0.5) * n_events * np.max((len(Data.sig_channels)-1.5, 1)) * 1.5
     fig = plt.figure(figsize=(width, 3), layout='constrained')
     subfigs = fig.subfigures(ncols=len(Data.sig_channels), wspace=0.2)
+    if len(Data.sig_channels) == 1:
+        subfigs = [subfigs]
+
     for subfig, ch in zip(subfigs, Data.sig_channels):
         axs = subfig.subplots(ncols=n_events, sharey=True)
 

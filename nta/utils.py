@@ -256,7 +256,6 @@ def set_notebook_params(grp_key, notebook_id, root='.'):
 
     config_file = configparser.ConfigParser()
     config_file.read(os.path.join(root, f'{grp_key.lower()}_params.ini'))
-
     # Create dictionary with key:value for each config item
     data_loading_params = {}
     for key in config_file['data_loading']:

@@ -9,6 +9,7 @@ from tqdm import tqdm
 sys.path.append(f'{os.path.expanduser("~")}/GitHub/behavior-helpers/')
 
 from bh.data.datasets import HFDataset
+from bh.utils import convert_path_by_os
 
 from ..events import align
 from ..features import behavior_features as bf
@@ -48,10 +49,12 @@ class PhotometryDataset(HFDataset):
             self.ts = multi_mice.get('ts')
             self.trials = multi_mice.get('trials')
 
-        if 'session_order' in self.session_log:
-            self.trials = bf.order_sessions(self.trials, self.session_log)
-        else:
-            self.trials = bf.order_sessions(self.trials)
+        # if 'session_order' in self.session_log:
+        #     self.trials = bf.order_sessions(self.trials, self.session_log)
+        # else:
+        # Not using absolute session order because it doesn't normalize for
+        # different paces of task progression.
+        self.trials = bf.order_sessions(self.trials)
 
         self.sig_channels = (list(self.sig_channels)
                              if isinstance(self.sig_channels, set) else [])
@@ -67,6 +70,7 @@ class PhotometryDataset(HFDataset):
 
         gc.collect()
 
+    @convert_path_by_os
     def set_save_path(self):
         '''Set save path and create the directory.'''
         save_path = self.root / 'headfixed_DAB_data/figures' / self.label
@@ -79,6 +83,7 @@ class PhotometryDataset(HFDataset):
         channels = {'z_grnL', 'z_grnR', 'z_redR', 'z_redL'}
         return channels
 
+    @convert_path_by_os
     def set_timeseries_path(self):
         '''Set path to timeseries data file.'''
         file_path = self.set_session_path()
@@ -241,7 +246,8 @@ class PhotometryDataset(HFDataset):
             align_params[key] = arg
         print(align_params)
 
-        self.trials_aligned = self.trials.copy()
+        if not hasattr(self, 'trials_aligned'):
+            self.trials_aligned = self.trials.copy()
         for event in events:
             self.trials_aligned = align.align_photometry_to_event(
                 self.trials_aligned,
