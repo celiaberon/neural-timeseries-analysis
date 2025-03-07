@@ -1,6 +1,7 @@
 import configparser
 import functools
 import os
+import platform
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -76,7 +77,7 @@ def write_metadata(file_path, metadata, new_plot=True):
 
     # Create new metadata text file or append to existing file for each
     # subplot.
-    metadata_path = file_path.split('/')
+    metadata_path = file_path.split('\\') if platform.system() == 'Windows' else file_path.split('/')
     metadata_path.insert(-1, 'metadata')
     metadata_path = '/'.join(metadata_path)
 
@@ -239,6 +240,17 @@ def label_outer_axes(fig, axs, xlabel, ylabel):
 
 
 def html_to_pageless_pdf(input_html, output_pdf):
+    
+    # Platform-specific wkhtmltopdf path
+    if platform.system() == 'Windows':
+        wkhtmltopdf_path = r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+    else:
+        # Original Mac path (likely /usr/local/bin/wkhtmltopdf or similar)
+        wkhtmltopdf_path = '/usr/local/bin/wkhtmltopdf'  # Adjust if different
+            
+    # Create configuration with explicit path
+    config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+    
     options = {
         'page-size': 'A1',                  # Larger page size for continuous flow
         'disable-smart-shrinking': '',      # Avoids shrinking content, useful for continuous layouts
@@ -249,7 +261,7 @@ def html_to_pageless_pdf(input_html, output_pdf):
         'viewport-size': '1280x1024',       # Sets viewport for better handling of embedded images
 
     }
-    pdfkit.from_file(input_html, output_pdf, options=options)
+    pdfkit.from_file(input_html, output_pdf, options=options, configuration=config)
 
 
 def set_notebook_params(grp_key, notebook_id, root='.'):
