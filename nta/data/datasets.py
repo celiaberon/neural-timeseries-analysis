@@ -23,6 +23,8 @@ class PhotometryDataset(HFDataset):
     def __init__(self,
                  mice: str | list[str],
                  qc_photo: bool = True,
+                 design_mat: bool = False,
+                 design_mat_params: dict = {},
                  **kwargs):
 
         super().__init__(mice, **kwargs)
@@ -32,6 +34,8 @@ class PhotometryDataset(HFDataset):
         self.channels = self.set_channels()
         self.hemi_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
         self.sig_channels = set()
+        self.design_mat = design_mat
+        self.design_mat_params = design_mat_params
 
     def load_data(self):
 
@@ -62,7 +66,6 @@ class PhotometryDataset(HFDataset):
 
         # Some validation steps on loaded data.
         self.get_sampling_freq()
-        self.check_event_order()
 
         # Downcast datatypes to make more memory efficient.
         self.downcast_dtypes()
@@ -128,8 +131,8 @@ class PhotometryDataset(HFDataset):
         ts = self.eval_photo_sig(ts)
         if ts is None:
             return trials, None
-        # if kwargs:
-        #     ts = make_design_mat(ts, trials, **kwargs)
+        if self.design_mat:
+            ts = make_design_mat(ts, trials, **self.design_mat_params)
         return trials, ts
 
     def cleanup_cols(self, df_dict):

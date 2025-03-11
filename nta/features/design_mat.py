@@ -208,7 +208,7 @@ def add_heatmap_columns(timeseries, trials):
     # Calculate latency between selection and first consumption licks.
     latency = (ts_
                .groupby('nTrial')
-               .agg({'Consumption': sum, 'stateConsumption': sum})
+               .agg({'Consumption': 'sum', 'stateConsumption': 'sum'})
                .diff(axis='columns')
                .rename(columns={'stateConsumption': 't_sel_to_cons'}))
     ts_['hm_t_sel_to_cons'] = (ts_['nTrial']
@@ -266,7 +266,7 @@ def track_enl_period(timeseries: pd.DataFrame,
     '''
 
     ts_ = timeseries.copy()
-    ts_[f't_to_{enl_col.lower()}_on'] = 0  # 0 outside of ENL period
+    ts_[f't_to_{enl_col.lower()}_on'] = 0.  # 0 outside of ENL period
     enl = ts_.query(f'{enl_col} == 1')
 
     # Scaling factor to keep within similar range of other features.
@@ -367,7 +367,7 @@ def make_design_mat(timeseries: pd.DataFrame,
 
     # Make design matrix only containing licks and essential trial IDs.
     dm_cols = (lick_cols
-               + ['nTrial', 'iBlock', 't_to_enl_on', 'session',
+               + ['nTrial', 'iBlock', 't_to_enl_on', 'Session',
                   'session_clock']
                + photo_cols)
     dm = ts_[dm_cols].copy()
