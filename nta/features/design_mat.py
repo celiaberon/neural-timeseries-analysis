@@ -266,7 +266,7 @@ def track_enl_period(timeseries: pd.DataFrame,
     '''
 
     ts_ = timeseries.copy()
-    ts_[f't_to_{enl_col.lower()}_on'] = 0  # 0 outside of ENL period
+    ts_[f't_to_{enl_col.lower()}_on'] = 0.  # 0 outside of ENL period
     enl = ts_.query(f'{enl_col} == 1')
 
     # Scaling factor to keep within similar range of other features.

@@ -114,7 +114,7 @@ def find_group_peak_time(ts: pd.DataFrame,
 
     if max_peak_delay is None:
         event = times_col.split('_')[0]
-        max_peak_delay = event_lags.get(event)
+        max_peak_delay = event_lags.get(event, 0.3)
 
     # Find group mean peak time to use for trial peak calculations.
     ts_peak_time_window = ts.loc[ts[times_col].between(0, max_peak_delay)]
