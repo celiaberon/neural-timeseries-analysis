@@ -48,6 +48,29 @@ def single_session(func):
     return inner
 
 
+def calc_sess_per_mouse(trials):
+    sess_per_mouse = (trials
+                       .groupby("Mouse", observed=True)["Session"]
+                       .nunique())
+    return f'\n{" " * 5}{sess_per_mouse.to_string().replace(chr(10), chr(10) + " " * 5)}'
+
+
+def calc_trials_per_cond(trials, grp_on):
+    trials_per_cond = (trials
+                       .groupby(grp_on, observed=True)["nTrial"]
+                       .nunique())
+
+    return f'\n{" " * 5}{trials_per_cond.to_string().replace(chr(10), chr(10) + " " * 5)}'
+
+
+def record_continuity_broken(df, metadata, **kwargs):
+    if 'continuity_broken' in df.columns:
+        metadata.insert(0, '\n')
+        metadata.insert(0, 'prep_data_params ='
+                        f'{kwargs.get("prep_data_params", "DEFAULT")}')
+    return metadata
+
+
 def save_plot_metadata(func):
 
     def inner(*args, **kwargs):
@@ -96,18 +119,10 @@ def write_metadata_lineplots(*args, **kwargs):
     new_plot = kwargs.get('n_iters', (1, 0))[1] == 0
     exploded_trials = args[0].copy()
 
-    # Number of sessions per mouse.
-    sess_per_mouse = np.array(exploded_trials
-                              .groupby("Mouse", as_index=False, observed=True)["Session"]
-                              .nunique())
+    # For trials per condition.
     grp_on = (kwargs.get('column')
               if not kwargs.get('ls_col', False)
               else [kwargs.get('column'), kwargs.get('ls_col')])
-
-    # Number of trials per condition (trace) in plot.
-    trials_per_cond = np.array(exploded_trials
-                               .groupby(grp_on, as_index=False, observed=True)["nTrial"]
-                               .nunique(), dtype='str')
 
     metadata = [f'filename = {fname}',
                 f'subplot = {kwargs.get("y_col").split("_")[0]}',
@@ -115,19 +130,15 @@ def write_metadata_lineplots(*args, **kwargs):
                 f'n_trials = {exploded_trials.nTrial.nunique()}',
                 f'n_sessions = {exploded_trials.Session.nunique()}',
                 f'mice = {exploded_trials.Mouse.unique()}',
-                f'sessions/mouse = {sess_per_mouse}',
+                f'sessions/mouse = {calc_sess_per_mouse(exploded_trials)}',
                 f'conditions = {grp_on}',
-                f'trials/condition = \n{trials_per_cond}',
+                f'trials/condition = \n{calc_trials_per_cond(exploded_trials, grp_on)}',
                 '\n',
                 ]
 
-    if new_plot & ('continuity_broken' in exploded_trials.columns):
-        metadata.insert(0, '\n')
-        metadata.insert(0, 'prep_data_params ='
-                        f'{kwargs.get("prep_data_params", "DEFAULT")}')
+    if new_plot:
+        metadata = record_continuity_broken(exploded_trials, metadata, **kwargs)
 
-    # Create new metadata text file or append to existing file for each
-    # subplot.
     write_metadata(fname, metadata, new_plot)
 
 
@@ -136,16 +147,8 @@ def write_metadata_peak_plots(*args, **kwargs):
     fname = kwargs.get('fname')
     peaks = args[0].copy()
 
-    # Number of sessions per mouse.
-    sess_per_mouse = np.array(peaks
-                              .groupby("Mouse", as_index=False, observed=True)["Session"]
-                              .nunique())
-
     # Number of trials per condition (trace) in plot.
     grp_on = ['Reward', kwargs.get('x_col')]
-    trials_per_cond = np.array(peaks
-                               .groupby(grp_on, as_index=False, observed=True)["nTrial"]
-                               .nunique(), dtype='str')
 
     metadata = [f'filename = {fname}',
                 f'peak_metrics = {kwargs.get("metrics")}',
@@ -154,16 +157,13 @@ def write_metadata_peak_plots(*args, **kwargs):
                 f'n_trials = {peaks.nTrial.nunique()}',
                 f'n_sessions = {peaks.Session.nunique()}',
                 f'mice = {peaks.Mouse.unique()}',
-                f'sessions/mouse = {sess_per_mouse}',
+                f'sessions/mouse = {calc_sess_per_mouse(peaks)}',
                 f'conditions = {grp_on}',
-                f'trials/condition = \n{trials_per_cond}',
+                f'trials/condition = \n{calc_trials_per_cond(peaks, grp_on)}',
                 '\n',
                 ]
 
-    if 'continuity_broken' in peaks.columns:
-        metadata.insert(0, '\n')
-        metadata.insert(0, 'prep_data_params ='
-                        f'{kwargs.get("prep_data_params", "DEFAULT")}')
+    metadata = record_continuity_broken(peaks, metadata, **kwargs)
 
     write_metadata(fname, metadata)
 
@@ -173,16 +173,8 @@ def write_metadata_roc(*args, **kwargs):
     fname = kwargs.get('fname')
     trials = kwargs.get('trials').copy()
 
-    # Number of sessions per mouse.
-    sess_per_mouse = np.array(trials
-                              .groupby("Mouse", as_index=False, observed=True)["Session"]
-                              .nunique())
-
     # Number of trials per condition (trace) in plot.
     grp_on = [kwargs.get('trial_type', 'Reward'), kwargs.get('pred_behavior')]
-    trials_per_cond = np.array(trials
-                               .groupby(grp_on, as_index=False, observed=True)["nTrial"]
-                               .nunique(), dtype='str')
 
     metadata = [f'filename = {fname}',
                 f'neural_event = {kwargs.get("neural_event")}',
@@ -192,18 +184,41 @@ def write_metadata_roc(*args, **kwargs):
                 f'n_trials = {trials.nTrial.nunique()}',
                 f'n_sessions = {trials.Session.nunique()}',
                 f'mice = {trials.Mouse.unique()}',
-                f'sessions/mouse = {sess_per_mouse}',
+                f'sessions/mouse = {calc_sess_per_mouse(trials)}',
                 f'conditions = {grp_on}',
-                f'trials/condition = \n{trials_per_cond}',
+                f'trials/condition = \n{calc_trials_per_cond(trials, grp_on)}',
                 '\n',
                 ]
 
-    if 'continuity_broken' in trials.columns:
-        metadata.insert(0, '\n')
-        metadata.insert(0, 'prep_data_params ='
-                        f'{kwargs.get("prep_data_params", "DEFAULT")}')
+    metadata = record_continuity_broken(trials, metadata, **kwargs)
 
     write_metadata(fname, metadata)
+
+
+def write_metadata_glm(*args, **kwargs):
+
+    fname = kwargs.get('fname')
+    trials = kwargs.get('trials').copy()
+    ts = kwargs.get('ts').copy()
+
+    events_per_predictor = ts.sum(axis=0).drop([col for col in ts.columns if col.startswith('z_')]).astype('int')
+
+    metadata = [f'filename = {fname}',
+                f'n_trials = {trials.nTrial.nunique()}',
+                f'n_sessions = {trials.Session.nunique()}',
+                f'mice = {trials.Mouse.unique()}',
+                f'sessions/mouse = {calc_sess_per_mouse(trials)}',
+                f'trials/mouse = {calc_trials_per_cond(trials, "Mouse")}',
+                f'events/predictor = \n{" " * 5}{events_per_predictor.to_string().replace(chr(10), chr(10) + " " * 5)}',
+                '\n',
+                ]
+
+    metadata = record_continuity_broken(trials, metadata, **kwargs)
+
+    with open(fname, 'w') as f:
+        for line in metadata:
+            f.write(line)
+            f.write('\n')
 
 
 def loop_cell_adjust_legend(flag, sp_idx, ax, n_groups, **kwargs):
