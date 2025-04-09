@@ -245,12 +245,13 @@ def label_outer_axes(fig, axs, xlabel, ylabel):
         fig = fig.fig
     else:
         [ax_.set(xlabel='', ylabel='') for ax_ in axs.flatten()]
-    fig.add_subplot(111, frameon=False)
+
+    ax = fig.add_subplot(111, frameon=False)
     plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
                     left=False, right=False)
-    plt.ylabel(xlabel, labelpad=10)
-    plt.xlabel(ylabel)
-    plt.tight_layout()
+    plt.ylabel(ylabel, labelpad=10)
+    plt.xlabel(xlabel, labelpad=10)
+
     return fig, axs
 
 

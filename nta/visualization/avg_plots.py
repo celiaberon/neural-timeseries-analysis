@@ -257,8 +257,8 @@ def set_new_axes(n_iters: list,
     col_wrap = kwargs.pop('col_wrap', 3)
 
     if figsize is None:
-        subplot_width = 4.0
-        subplot_height = 3.0 + behavior_hist
+        subplot_width = 2.3
+        subplot_height = 1.8 + behavior_hist
     else:
         subplot_width, subplot_height = figsize
 

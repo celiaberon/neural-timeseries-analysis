@@ -10,11 +10,18 @@ from nta.events.align import (get_sampling_freq, sort_by_trial_type,
                               trials_by_time_array)
 from nta.features.select_trials import subsample_trial_types
 
-sns.set(style='whitegrid',
-        rc={'axes.labelsize': 11,
-            'axes.titlesize': 11,
-            'legend.fontsize': 11,
-            'savefig.transparent': True})
+sns.set_theme(style='ticks',
+    font_scale=1.0,
+    rc={'axes.labelsize': 11,
+        'axes.titlesize': 11,
+        'savefig.transparent': True,
+        'legend.title_fontsize': 11,
+        'legend.fontsize': 10,
+        'legend.borderpad': 0.2,
+        'legend.frameon': False,
+        'figure.titlesize': 11,
+        'figure.subplot.wspace': 0.1,
+        })
 
 
 def add_relative_timing_columns(timeseries: pd.DataFrame,
@@ -232,7 +239,7 @@ def label_trial_types(ax,
                         (-x_offset, text_y),
                         va='center',
                         color=trial_color,
-                        fontsize=13,
+                        fontsize=11,
                         annotation_clip=False,
                         rotation=90
                         )
@@ -314,13 +321,14 @@ def center_xticks_around_zero(tstamps: list,
     pre_window_idcs = np.arange(center_idx, -1, step=-tick_interval)
     pre_window_idcs = pre_window_idcs[pre_window_idcs >= 0]  # positive idcs
     post_window_idcs = np.arange(center_idx, len(tstamps), step=tick_interval)
-    xticks = np.unique(np.concatenate((pre_window_idcs, post_window_idcs)))
+    xticks = np.unique(np.concatenate(([0], pre_window_idcs, post_window_idcs, [len(tstamps)-1])))
 
     # Get tick labels from timestamp list.
     xtick_labels = tstamps[xticks]
-    xtick_labels = [round(tick_label, 1) for tick_label in xtick_labels]
+    assert all([abs(round(tick_label)-tick_label) < 0.02 for tick_label in xtick_labels])
+    xtick_labels = [round(tick_label) for tick_label in xtick_labels]
 
-    return xticks, xtick_labels
+    return xticks, xtick_labels, center_idx
 
 
 def plot_heatmap(heatmap_array: np.array,
@@ -329,6 +337,7 @@ def plot_heatmap(heatmap_array: np.array,
                  fs: int | float = None,
                  tstamps: list = None,
                  ax=None,
+                 fig=None,
                  hm_kwargs=None,
                  **kwargs,
                  ):
@@ -386,13 +395,16 @@ def plot_heatmap(heatmap_array: np.array,
                            tstep=tstep,
                            **kwargs)
 
-    xticks, xticklabels = center_xticks_around_zero(tstamps,
+    xticks, xticklabels, center_x = center_xticks_around_zero(tstamps,
                                                     fs,
                                                     tick_interval=1.0)
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticklabels, rotation=0)
-    ax.set(ylabel='nTrial', xlabel='time (s)', yticks=[],
-           title=f'aligned to {align_event}')
+    ax.set(ylabel='nTrial', xlabel='time (s)', yticks=[])
+    
+    fig.subplots_adjust(top=0.95)
+    ax.annotate(align_event, (center_x-5, 1),
+                ha='left', va='bottom', fontsize=11, xycoords=('data', 'axes fraction'))
 
     return ax
 
@@ -419,7 +431,7 @@ def create_scaled_colorbar(fig, axs, vmin: float, vmax: float):
     norm = mpl.colors.Normalize(vmin=vmin, vmax=vmax)  # spectrogram min/max
     (fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
                   ax=axs,
-                  anchor=(1.0, 0.5),
+                  anchor=(1.0, 0.6),
                   panchor=(0, 0),
                   shrink=0.15,
                   label='z-score',
@@ -474,7 +486,7 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
         alignment_states = ['Cue', 'Select', 'Consumption']
 
     if figsize is None:
-        figsize = (3. * len(alignment_states), 2.0)
+        figsize = (2.3 * len(alignment_states), 1.8)
 
     tstep = round(1/fs, 4)
 
@@ -515,6 +527,7 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
                           tstamps=timestamps,
                           fs=fs,
                           ax=ax,
+                          fig=fig,
                           include_label=i < 1,
                           hm_kwargs={'vmin': vmin, 'vmax': vmax},
                           **kwargs)
@@ -523,6 +536,7 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
         ax, scatter_labels = scatter_behavior_events(trials_, ax, state, win,
                                                      fs=fs)
 
+    [ax_.set_ylabel('') for ax_ in axs[1:]]
     # Rescale colorbar to fit plot.
     fig, axs = create_scaled_colorbar(fig, axs, vmin, vmax)
 
@@ -536,7 +550,6 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
                    markerscale=2.,
                    edgecolor='white')
     h[scatter_labels.index('selection lick')].set_markeredgecolor('white')
-
     plt.tight_layout()
 
     return fig, axs
