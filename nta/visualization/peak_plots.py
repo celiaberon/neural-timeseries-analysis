@@ -140,18 +140,25 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
 
 def initialize_peak_fig(states,
                         *,
-                        figsize: tuple[int | float, int | float] = (3.5, 4.),
+                        figsize: tuple[int | float, int | float] = (2.5, 2.5),
                         axes_style: str = None,
                         flatten_layout: bool = False,
                         **mosaic_kwargs,
                         ):
 
-    sns.set(style='ticks',
-            rc={'axes.labelsize': 12,
-                'axes.titlesize': 12,
-                'savefig.transparent': True,
-                'legend.frameon': False
-                })
+    sns.set_theme(style='ticks',
+        font_scale=1.0,
+        rc={'axes.labelsize': 10,
+            'axes.titlesize': 11,
+            'savefig.transparent': True,
+            'legend.title_fontsize': 10,
+            'legend.fontsize': 10,
+            'legend.borderpad': 0.2,
+            'figure.titlesize': 10,
+            'figure.subplot.wspace': 0.1,
+            'xtick.labelsize': 9,
+            'ytick.labelsize': 9,
+            })
 
     if states:
         layout = [states]
@@ -162,8 +169,8 @@ def initialize_peak_fig(states,
                   ['Cue', 'reward'],
                   ['Cue', 'no reward'],
                   ['.', 'no reward']]
-    if figsize == (3.5, 4.) and (states or flatten_layout):
-        figsize = (2 * len(layout[0]), 2)
+    if figsize == (2.5, 2.5) and (states or flatten_layout):
+        figsize = (1.2 * len(layout[0]), 2.5)
 
     if 'subfig' in mosaic_kwargs:
         fig = mosaic_kwargs.pop('subfig')
@@ -179,20 +186,20 @@ def initialize_peak_fig(states,
         fig, ax = plt.subplot_mosaic(layout, figsize=figsize, **mosaic_kwargs)
 
     if states is None:
-        ax['no reward'].set(title='Unrewarded',)
-        ax['reward'].set(title='Rewarded', xlabel='')
-        ax['Cue'].set(title='Cue')
+        ax['no reward'].set(title='Unrewarded', ylabel='')
+        ax['reward'].set(title='Rewarded', xlabel='', ylabel='')
+        ax['Cue'].set(title='Cue', ylabel='z-score')
     else:
         for state in states:
             ax[state].set(title=state)
 
     match axes_style:
         case 'constant':
-            ax['Cue'].set(ylim=(-2.5, 4.5))
+            ax['Cue'].set(ylim=(-2.5, 4.5), ylabel='z-score')
             ax['reward'].set(ylim=(-2.5, 4.5))
             ax['no reward'].set(ylim=(-2.5, 4.5))
         case 'pos-neg':
-            ax['Cue'].set(ylim=(0, 4.5))
+            ax['Cue'].set(ylim=(0, 4.5), ylabel='z-score')
             ax['reward'].set(ylim=(0, 4.5))
             ax['no reward'].set(ylim=(-2.5, 0))
         case dict():
@@ -304,6 +311,8 @@ def exclude_outliers(peaks: pd.DataFrame,
 def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
 
     ylab = channel.split('_')[0]
+    if ylab == 'z':
+        ylab = 'z-score'
 
     try:
         ax['reward'].set(xlabel='')
@@ -311,9 +320,9 @@ def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
                  int(ax['Cue'].get_xticks()[-1])]
 
         ax['Cue'].set(xlabel=col_id, ylabel=ylab, xticks=ticks)
-        ax['reward'].set(xlabel='', ylabel=ylab, xticks=ticks)
+        ax['reward'].set(xlabel='', ylabel='', xticks=ticks)
         ax['no reward'].set(xlabel=col_id, yticks=[0, -1, -2], xticks=ticks,
-                            ylim=(-3, 0), ylabel=ylab)
+                            ylim=(-3, 0), ylabel='')
         ax['no reward'].axhline(y=0, color='k', lw=2)
     except KeyError:
         pass
@@ -390,8 +399,9 @@ def plot_swarm_and_point(peaks_agg, Data, hue, palette,
 
     n_events = len(events)
     x_col = kwargs.get('x', 'Reward')
-    width = (peaks_agg[x_col].nunique() + 0.5) * n_events * np.max((len(Data.sig_channels)-1.5, 1)) * 1.5
-    fig = plt.figure(figsize=(width, 3), layout='constrained')
+    scale_factor = 1.2 if peaks_agg[x_col].nunique() == 1 else 0.5
+    width = (peaks_agg[x_col].nunique() + scale_factor) * n_events * np.max((len(Data.sig_channels)-1.5, 1)) * 1.
+    fig = plt.figure(figsize=(width, 2), layout='constrained')
     subfigs = fig.subfigures(ncols=len(Data.sig_channels), wspace=0.2)
     if len(Data.sig_channels) == 1:
         subfigs = [subfigs]
@@ -412,25 +422,30 @@ def plot_swarm_and_point(peaks_agg, Data, hue, palette,
                     hue=hue, palette=palette, ax=ax, markersize=size*2,
                     legend=False, linestyle='none', dodge=True, zorder=3,
                     errorbar=None)
-            ax.axhline(y=0, color='k', ls='--')
+            ax.axhline(y=0, color='k', lw=0.5)
 
             if x_col != 'Reward':
                 tick_labels = ax.get_xticklabels()
             elif peaks_agg['Reward'].nunique() > 1:
-                tick_labels = [Data.palettes['reward_pal_labels'][v] for v in ax.get_xticks()]
-            else:
-                tick_labels = ['' for v in ax.get_xticks()]
-            ax.set_xticks(
+                tick_labels = [Data.palettes['reward_pal_labels_short'][v] for v in ax.get_xticks()]
+                ax.set(xlabel='Outcome')
+                ax.set_xticks(
                 ax.get_xticks(), tick_labels,
-                rotation=45, ha='right')
-            ax.set(xlabel='', title=event, ylabel='session means (z)',
+                # rotation=45, ha='right'
+                )
+            else:
+                # tick_labels = ['' for v in ax.get_xticks()]
+                ax.set_xticks([])
+                ax.set_xlabel('')
+            
+            ax.set(title=event, ylabel='session means (z)',
                    ylim=ylim)
 
             if pd.api.types.is_numeric_dtype(peaks_agg[hue]) & (peaks_agg[hue].nunique() > 3):
                 avg_plots.convert_leg_to_cbar(fig, ax, cpal=palette)
             else:
                 ax.legend().remove()
-            subfig.suptitle(label_hemi(ch, Data.sig_channels), fontsize=12,
+            subfig.suptitle(label_hemi(ch, Data.sig_channels), fontsize=11,
                             ha='right')
             sns.despine()
     return fig
@@ -460,7 +475,7 @@ def plot_baseline_vs_TENL(Data, trials, base_args, args, plot_id):
         # Annotate subfigure with hemisphere label
         # hemi_label = Data.hemi_labels.get(ch[-1]) if single_color else label_hemi(ch)
         hemi_label = label_hemi(ch, Data.sig_channels)
-        subfig.suptitle(hemi_label, fontsize=12, y=1.1)
+        subfig.suptitle(hemi_label, fontsize=11, y=1.1)
 
         # Calculate correlation for the channel
         channel_corr = calc_grouped_corr(

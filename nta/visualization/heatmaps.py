@@ -12,14 +12,14 @@ from nta.features.select_trials import subsample_trial_types
 
 sns.set_theme(style='ticks',
     font_scale=1.0,
-    rc={'axes.labelsize': 11,
-        'axes.titlesize': 11,
+    rc={'axes.labelsize': 10,
+        'axes.titlesize': 10,
         'savefig.transparent': True,
-        'legend.title_fontsize': 11,
+        'legend.title_fontsize': 10,
         'legend.fontsize': 10,
         'legend.borderpad': 0.2,
         'legend.frameon': False,
-        'figure.titlesize': 11,
+        'figure.titlesize': 10,
         'figure.subplot.wspace': 0.1,
         })
 
@@ -141,7 +141,7 @@ def scatter_behavior_events(trials: pd.DataFrame,
         tstep = 1 / fs
 
     # tstep = 1 / fs  # timestep in seconds
-    color_dict = {'selection lick': 'w',
+    color_dict = {'selection lick': 'lightgray',
                   'first consumption lick': 'k',
                   'cue onset': sns.color_palette('colorblind')[3]}
 
@@ -400,7 +400,7 @@ def plot_heatmap(heatmap_array: np.array,
                                                     tick_interval=1.0)
     ax.set_xticks(xticks)
     ax.set_xticklabels(xticklabels, rotation=0)
-    ax.set(ylabel='nTrial', xlabel='time (s)', yticks=[])
+    ax.set(ylabel='Trial', xlabel='Time (s)', yticks=[])
     
     fig.subplots_adjust(top=0.95)
     ax.annotate(align_event, (center_x-5, 1),
@@ -486,7 +486,7 @@ def plot_heatmap_wrapper(trials: pd.DataFrame,
         alignment_states = ['Cue', 'Select', 'Consumption']
 
     if figsize is None:
-        figsize = (2.3 * len(alignment_states), 1.8)
+        figsize = (2.4 * len(alignment_states), 1.6)
 
     tstep = round(1/fs, 4)
 

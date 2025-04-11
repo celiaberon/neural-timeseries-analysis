@@ -53,6 +53,13 @@ def plot_loop(trials, subplot_iter, iter_label, **kwargs):
             axs=axs,
             **kwargs
         )
+    
+    if len(axs.shape)==1:
+        [ax_.set(ylabel='', yticklabels=[]) for ax_ in axs[1:]]
+    else:
+        [ax_.set(ylabel='', yticklabels=[]) for ax_ in axs[0][1:]]
+        [ax_.set(ylabel='', yticklabels=[]) for ax_ in axs[1][1:]]
+    fig.tight_layout()
 
     return fig, axs
 
@@ -153,7 +160,7 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
     single_color = len(set([ch[-4:-1] for ch in sig_channels])) == 1
     channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
     [ax.set_title(label_hemi(ch, channels),
-                  loc='left', pad=20, fontsize=12)
+                  loc='left', pad=20, fontsize=11)
      for ax, ch in zip(axs, sig_channels)]
 
     if kwargs.get('save', False):
@@ -199,7 +206,7 @@ def plotting_wrapper_trial_types(trials: pd.DataFrame,
         **kwargs
     )
 
-    [ax.set_title(label, loc='left', pad=20, fontsize=12)
+    [ax.set_title(label, loc='left', pad=20, fontsize=11)
      for ax, label in zip(axs, labels)]
 
     if kwargs.get('save', False):
@@ -256,9 +263,12 @@ def set_new_axes(n_iters: list,
     '''
     col_wrap = kwargs.pop('col_wrap', 3)
 
-    if figsize is None:
-        subplot_width = 2.3
-        subplot_height = 1.8 + behavior_hist
+    if (figsize is None) and behavior_hist:
+        subplot_width = 2.0
+        subplot_height = 2.7
+    elif figsize is None:
+        subplot_width = 2.5
+        subplot_height = 2.5
     else:
         subplot_width, subplot_height = figsize
 
@@ -415,14 +425,16 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
 
     sns.set_theme(style='ticks',
                   font_scale=1.0,
-                  rc={'axes.labelsize': 11,
-                      'axes.titlesize': 11,
+                  rc={'axes.labelsize': 10,
+                      'axes.titlesize': 10,
                       'savefig.transparent': True,
-                      'legend.title_fontsize': 11,
+                      'legend.title_fontsize': 10,
                       'legend.fontsize': 10,
                       'legend.borderpad': 0.2,
-                      'figure.titlesize': 11,
+                      'figure.titlesize': 10,
                       'figure.subplot.wspace': 0.1,
+                       'xtick.labelsize': 9,
+                      'ytick.labelsize': 9,
                       })
 
     n_iters = n_iters or [1, 0]
@@ -465,7 +477,6 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
     if behavior_hist:
         ax2 = behavior_event_distributions(ts, y_col, ax2,
                                            column=column, **kwargs)
-
     plt.tight_layout()
     return fig, axs
 
@@ -597,7 +608,7 @@ def convert_leg_to_cbar(fig, ax, labels=None, cpal=None,
     if 'Rewarded' in lab:
         plt.legend(*list(zip(*[(h_, l_) for h_, l_ in zip(h, lab)
                                if l_ in ['Rewarded', 'Unrewarded']])),
-                   bbox_to_anchor=(1.5, 1), markerscale=1., fontsize=13,
+                   bbox_to_anchor=(1.5, 1), markerscale=1., fontsize=11,
                    edgecolor='white')
 
     return fig, ax

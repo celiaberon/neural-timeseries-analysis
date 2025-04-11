@@ -39,8 +39,6 @@ class PhotometryDataset(HFDataset):
 
     def load_data(self):
 
-        # Initizalize attributes that will hold data.
-
         # Load all data.
         if not isinstance(self.mice, list):
             self.mouse_ = self.mice
