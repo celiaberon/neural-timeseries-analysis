@@ -250,7 +250,7 @@ def label_outer_axes(fig, axs, xlabel, ylabel):
     plt.tick_params(labelcolor='none', which='both', top=False, bottom=False,
                     left=False, right=False)
     plt.ylabel(ylabel, labelpad=10)
-    plt.xlabel(xlabel, labelpad=10)
+    plt.xlabel(xlabel)
 
     return fig, axs
 

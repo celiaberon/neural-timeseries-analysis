@@ -342,8 +342,9 @@ def plot_correlation(r, col0_label, col1_label, ax=None, hue=None,
                 legend=legend)
     ax.axhline(y=0, color='k')
     ax.set(ylim=(-1, 1),
-           title=f'correlation {col0_label}\nvs. {col1_label}',
            xlabel='hemisphere')
+    ax.set_ylabel('correlation', labelpad=0)
+    # ax.set_title(f'correlation {col0_label}\nvs. {col1_label}', fontsize=10)
     plt.legend(bbox_to_anchor=(1.8, 1))
     sns.despine()
     return ax
@@ -455,7 +456,7 @@ def plot_baseline_vs_TENL(Data, trials, base_args, args, plot_id):
 
     '''Convenient function for common peak plot'''
     base_args['plot_func_kws'].update(args['plot_func_kws'])
-    fig = plt.figure(figsize=(len(Data.sig_channels)*3, 2.2), layout='constrained')
+    fig = plt.figure(figsize=(len(Data.sig_channels)*2.15, 1.3), layout='constrained')
     subfigs = fig.subfigures(ncols=len(Data.sig_channels)+1)
 
     corrs = pd.DataFrame()
@@ -469,13 +470,13 @@ def plot_baseline_vs_TENL(Data, trials, base_args, args, plot_id):
             fname=os.path.join(Data.save_path, f'{plot_id}_{ch}.png'),
             **base_args
         )
-        ax['Cue'].set_xticks(ax['Cue'].get_xticks(), ax['Cue'].get_xticklabels(), rotation=45)
-        ax['Cue'].set(ylim=(-2, 1), ylabel='z-score', title='')
+        ax['Cue'].set_xticks([0, 2, 4], [1, 1.5, 2])
+        ax['Cue'].set(ylim=(-2, 1), ylabel='avg z-score', title='', xlabel='ENL (s)')
 
         # Annotate subfigure with hemisphere label
         # hemi_label = Data.hemi_labels.get(ch[-1]) if single_color else label_hemi(ch)
         hemi_label = label_hemi(ch, Data.sig_channels)
-        subfig.suptitle(hemi_label, fontsize=11, y=1.1)
+        subfig.suptitle(hemi_label, fontsize=10, y=1.1)
 
         # Calculate correlation for the channel
         channel_corr = calc_grouped_corr(
@@ -484,7 +485,7 @@ def plot_baseline_vs_TENL(Data, trials, base_args, args, plot_id):
             col0=base_args['x_col'],
             col1=f'Cue_{ch}_offset'
         )
-        channel_corr['channel'] = hemi_label #.split()[0]
+        channel_corr['channel'] = hemi_label.split()[0]
         corrs = pd.concat((corrs, channel_corr)).reset_index(drop=True)
 
     plot_correlation(corrs, col0_label=base_args['x_col'],

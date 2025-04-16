@@ -160,7 +160,7 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
     single_color = len(set([ch[-4:-1] for ch in sig_channels])) == 1
     channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
     [ax.set_title(label_hemi(ch, channels),
-                  loc='left', pad=20, fontsize=11)
+                  loc='left', pad=10, fontsize=11)
      for ax, ch in zip(axs, sig_channels)]
 
     if kwargs.get('save', False):
