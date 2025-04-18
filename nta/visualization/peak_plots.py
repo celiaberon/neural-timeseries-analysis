@@ -29,6 +29,7 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
                        mosaic_kws: dict = None,
                        ignore_reward: bool = False,
                        states: list = None,
+                       existing_ax: dict=None,
                        **kwargs):
 
     '''
@@ -76,8 +77,12 @@ def plot_peaks_wrapper(peaks: pd.DataFrame,
         plot_func_kws = {}
     if mosaic_kws is None:
         mosaic_kws = {}
-
-    fig, ax = initialize_peak_fig(states, **mosaic_kws)
+    
+    if existing_ax is not None:
+        ax = existing_ax
+        fig = next(iter(ax.values())).figure
+    else:
+        fig, ax = initialize_peak_fig(states, **mosaic_kws)
 
     # Set color palette to be passed as a keyword argument to plotting func.
     plot_func_kws['palette'] = set_color_palette(peaks,
@@ -149,7 +154,7 @@ def initialize_peak_fig(states,
     sns.set_theme(style='ticks',
         font_scale=1.0,
         rc={'axes.labelsize': 10,
-            'axes.titlesize': 11,
+            'axes.titlesize': 10,
             'savefig.transparent': True,
             'legend.title_fontsize': 10,
             'legend.fontsize': 10,
@@ -158,6 +163,8 @@ def initialize_peak_fig(states,
             'figure.subplot.wspace': 0.1,
             'xtick.labelsize': 9,
             'ytick.labelsize': 9,
+            'legend.frameon': False,
+            'hatch.linewidth': 1.0,
             })
 
     if states:
@@ -334,21 +341,84 @@ def config_plot(ax, channel, metrics, col_id: str = '', **kwargs):
     return ax
 
 
-def plot_correlation(r, col0_label, col1_label, ax=None, hue=None,
+def plot_correlation(r, ax=None, hue=None,
                      palette=None, legend=True, **kwargs):
     if ax is None:
         fig, ax = plt.subplots()
-    sns.barplot(data=r, x='channel', y='r', hue=hue, palette=palette, ax=ax,
-                legend=legend)
+    if palette is None:
+        palette = sns.color_palette('deep', n_colors=len(r[hue].unique()))
+    if 'hatch' not in r.columns:
+        r['hatch'] = ' '
+
+    # Calculate number of hue levels and total bars per x position
+    n_hue_levels = len(r[hue].unique()) if hue else 1
+    n_bars_per_hue = r.get('hatch').nunique()  # number of hatch styles
+    total_width = 0.8   # total width available for all bars at each x position
+    bar_width = total_width / (n_hue_levels * n_bars_per_hue)
+    
+    for i, channel in enumerate(r['channel'].unique()):
+        channel_data = r.query('channel == @channel')
+        
+        # For each hue value
+        for j, hue_val in enumerate(channel_data[hue].unique()):
+            hue_data = channel_data.query(f'{hue} == {hue_val}')
+            
+            # Base position for this hue group
+            hue_center = i + (j - (n_hue_levels-1)/2) * (bar_width * n_bars_per_hue)
+            
+            # Plot non-hatched bar
+            non_hatched = hue_data.query('hatch == " "')
+            if not non_hatched.empty:
+                ax.bar(hue_center - bar_width/2, 
+                      non_hatched['r'].values[0],
+                      width=bar_width,
+                      color=palette[hue_val] if isinstance(palette, dict) else palette[j])
+            
+            # Plot hatched bars
+            for hatch in hue_data['hatch'].unique():
+                if hatch == ' ':
+                    continue
+                hatched = hue_data.query('hatch == @hatch')
+                if not hatched.empty:
+                    ax.bar(hue_center + bar_width/2,
+                        hatched['r'].values[0],
+                        width=bar_width,
+                        color=palette[hue_val] if isinstance(palette, dict) else palette[j],
+                        hatch=hatch)
+
     ax.axhline(y=0, color='k')
     ax.set(ylim=(-1, 1),
            xlabel='hemisphere')
     ax.set_ylabel('correlation', labelpad=0)
-    # ax.set_title(f'correlation {col0_label}\nvs. {col1_label}', fontsize=10)
-    plt.legend(bbox_to_anchor=(1.8, 1))
-    sns.despine()
-    return ax
 
+    import matplotlib.patches as mpatches
+    
+    if r.hatch.nunique() == 1:
+        legend_elements = ax.legend().legendHandles
+    else:
+        # Create legend elements for each combination of hue and hatch
+        legend_elements = []
+        hue_values = r[hue].unique()
+        hatch_values = dict(zip(r['trial_type'].unique(), r['hatch'].unique()))
+        for j, hue_val in enumerate(hue_values):
+            color = palette[hue_val] if isinstance(palette, dict) else palette[j]
+            for hatch_label, hatch in hatch_values.items():
+                patch = mpatches.Patch(
+                    facecolor=color,
+                    hatch=hatch,
+                    label=f'{hue_val} - {hatch_label}'
+                )
+                legend_elements.append(patch)
+
+    if legend:
+        ax.legend(handles=legend_elements, bbox_to_anchor=(1., 1))
+    sns.despine()
+    
+    # Set x-ticks at channel positions
+    ax.set_xticks(range(len(r['channel'].unique())))
+    ax.set_xticklabels(r['channel'].unique())
+    
+    return ax
 
 def calc_grouped_corr(trials: pd.DataFrame,
                       col0: str,
@@ -460,36 +530,60 @@ def plot_baseline_vs_TENL(Data, trials, base_args, args, plot_id):
     subfigs = fig.subfigures(ncols=len(Data.sig_channels)+1)
 
     corrs = pd.DataFrame()
-    # single_color = len(set([ch[-4:-1] for ch in Data.sig_channels])) == 1
     for subfig, ch in zip(subfigs, Data.sig_channels):
         base_args['mosaic_kws'] = {'subfig': subfig}
+        if isinstance(base_args['style'], str):
+            style = base_args['style']
 
-        _, ax = plot_peaks_wrapper(
-            trials,
-            channel=ch,
-            fname=os.path.join(Data.save_path, f'{plot_id}_{ch}.png'),
-            **base_args
-        )
+            for i, (ls, val) in enumerate(zip(['--', '-'], [1, 0])):
+                base_args['plot_func_kws']['ls'] = ls
+                _, ax = plot_peaks_wrapper(
+                    trials.query(f'{style} == {val}'),
+                    channel=ch,
+                    fname=os.path.join(Data.save_path, f'{plot_id}_{ch}.svg'),
+                    **base_args,
+                    existing_ax=ax if i>0 else None,  # Pass existing axes
+                )
+        else:
+            _, ax = plot_peaks_wrapper(
+                trials,
+                channel=ch,
+                fname=os.path.join(Data.save_path, f'{plot_id}_{ch}.svg'),
+                **base_args
+            )
         ax['Cue'].set_xticks([0, 2, 4], [1, 1.5, 2])
         ax['Cue'].set(ylim=(-2, 1), ylabel='avg z-score', title='', xlabel='ENL (s)')
 
         # Annotate subfigure with hemisphere label
-        # hemi_label = Data.hemi_labels.get(ch[-1]) if single_color else label_hemi(ch)
         hemi_label = label_hemi(ch, Data.sig_channels)
-        subfig.suptitle(hemi_label, fontsize=10, y=1.1)
+        subfig.suptitle(hemi_label, fontsize=11, y=1.1)
 
-        # Calculate correlation for the channel
-        channel_corr = calc_grouped_corr(
-            trials,
-            grouping_variable=args['plot_func_kws']['hue'],
-            col0=base_args['x_col'],
-            col1=f'Cue_{ch}_offset'
-        )
-        channel_corr['channel'] = hemi_label.split()[0]
-        corrs = pd.concat((corrs, channel_corr)).reset_index(drop=True)
+        if isinstance(style, str):
+            for i, (hatch, val) in enumerate(zip(['////', ' '], [1, 0])):
+                # Calculate correlation for the channel and trial type
+                channel_corr = calc_grouped_corr(
+                    trials.query(f'{style} == {val}'),
+                    grouping_variable=args['plot_func_kws']['hue'],
+                    col0=base_args['x_col'],
+                    col1=f'Cue_{ch}_offset'
+                )
+                channel_corr['channel'] = hemi_label.split()[0]
+                channel_corr['trial_type'] = val
+                channel_corr['hatch'] = hatch
+                corrs = pd.concat((corrs, channel_corr)).reset_index(drop=True)
+        
+        else:
+            # Calculate correlation for the channel
+            channel_corr = calc_grouped_corr(
+                trials,
+                grouping_variable=args['plot_func_kws']['hue'],
+                col0=base_args['x_col'],
+                col1=f'Cue_{ch}_offset'
+            )
+            channel_corr['channel'] = hemi_label.split()[0]
+            corrs = pd.concat((corrs, channel_corr)).reset_index(drop=True)
 
-    plot_correlation(corrs, col0_label=base_args['x_col'],
-                     col1_label='baseline',
-                     ax=subfigs[-1].subplots(), legend=False,
+    plot_correlation(corrs,
+                     ax=subfigs[-1].subplots(), legend=True,
                      **args['plot_func_kws'])
     return fig, corrs

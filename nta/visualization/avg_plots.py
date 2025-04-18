@@ -54,7 +54,9 @@ def plot_loop(trials, subplot_iter, iter_label, **kwargs):
             **kwargs
         )
     
-    if len(axs.shape)==1:
+    if isinstance(axs, list):
+        pass
+    elif len(axs.shape)==1:
         [ax_.set(ylabel='', yticklabels=[]) for ax_ in axs[1:]]
     else:
         [ax_.set(ylabel='', yticklabels=[]) for ax_ in axs[0][1:]]
@@ -160,7 +162,7 @@ def plotting_wrapper_channels(trials: pd.DataFrame,
     single_color = len(set([ch[-4:-1] for ch in sig_channels])) == 1
     channel_labels = {'L': 'Left Hemisphere', 'R': 'Right Hemisphere'}
     [ax.set_title(label_hemi(ch, channels),
-                  loc='left', pad=10, fontsize=11)
+                  loc='left', pad=15, fontsize=11)
      for ax, ch in zip(axs, sig_channels)]
 
     if kwargs.get('save', False):
@@ -433,8 +435,9 @@ def plot_trial_type_comparison(ts: pd.DataFrame,
                       'legend.borderpad': 0.2,
                       'figure.titlesize': 10,
                       'figure.subplot.wspace': 0.1,
-                       'xtick.labelsize': 9,
+                      'xtick.labelsize': 9,
                       'ytick.labelsize': 9,
+                      'legend.frameon': False,
                       })
 
     n_iters = n_iters or [1, 0]
@@ -509,7 +512,7 @@ def config_plot(ax,
                label=None)
     ax.axhline(y=0, color='k', ls='-', lw=0.8, alpha=1.0, zorder=0)
     ax.set(xlabel='Time (s)', ylabel='z-score', ylim=ylim)
-    ax.text(x=-0.05, y=ylim[1] + 0.1 * sum(ylim), s=align_event)
+    ax.text(x=-0.05, y=ylim[1] + 0.1 * sum(ylim), s=align_event, size=11)
     ax.set(xlim=(-window[0], window[1]))
     ticks = ax.get_xticks()
     ax.set_xticks([int(tick) for tick in ticks if tick.is_integer()])
